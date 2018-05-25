@@ -4,7 +4,7 @@
 
 ## A Julia implementation of the Sort-merge join algorithm.
 
-The [https://en.wikipedia.org/wiki/Sort-merge_join](Sort-merge join) allows to **quickly** find the matching elements in two separate arrays or collections, regardless of the type of the container.
+The [Sort-merge join](https://en.wikipedia.org/wiki/Sort-merge_join) allows to **quickly** find the matching elements in two separate arrays or collections, regardless of the type of the container.
 
 Consider the following arrays:
 ``` julia
@@ -61,7 +61,7 @@ function signdist(vec1, vec2, i1, i2)
     return sign(vec1[i1] - vec2[i2])
 end
 ```
-i.e. it returns the *sign* of the *distance* between the `i1`-th element in the `vec1` vector and the the `i2`-th element in the `vec2` vector.  This function works perfectly when the data to be matched are numbers stored in unidimensional arrays.  However, the user may provide customized version of the `signdist` function, to handle **any** type of data, including multidimensional arrays, [https://github.com/JuliaData/DataFrames.jl](dataframes), user defined types etc.  In the following sections we will show two examples.
+i.e. it returns the *sign* of the *distance* between the `i1`-th element in the `vec1` vector and the the `i2`-th element in the `vec2` vector.  This function works perfectly when the data to be matched are numbers stored in unidimensional arrays.  However, the user may provide customized version of the `signdist` function, to handle **any** type of data, including multidimensional arrays, [dataframes](https://github.com/JuliaData/DataFrames.jl), user defined types etc.  In the following sections we will show two examples.
 
 
 The `signdist` function, both the default one or the customized ones, must accept at least four arguments:
@@ -85,7 +85,7 @@ The last case allows to join data also when there is no clear order relations be
 
 
 ## Using 2D arrays as input
-Suppose we want to join arrays containing geographical coordinates, latitude and longitude.  We will use the `gcirc` function in the [https://github.com/JuliaAstro/AstroLib.jl](Astrolib) package to calculate the  great circle arc distances between two points.
+Suppose we want to join arrays containing geographical coordinates, latitude and longitude.  We will use the `gcirc` function in the [Astrolib](https://github.com/JuliaAstro/AstroLib.jl) package to calculate the  great circle arc distances between two points.
 
 ``` julia
 # Prepare input arrays
@@ -129,7 +129,7 @@ Note that using the `skipsort=true` keyword on non-sorted input arrays may resul
 
 
 ## Using 2D arrays as input
-We may perform the join described above also if the data are stored in a [https://github.com/JuliaData/DataFrames.jl](dataframes), by providing a suitable `signdist` function:
+We may perform the join described above also if the data are stored in a [dataframe](https://github.com/JuliaData/DataFrames.jl), by providing a suitable `signdist` function:
 
 ``` julia
 using DataFrames
