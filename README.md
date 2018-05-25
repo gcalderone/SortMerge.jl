@@ -53,24 +53,24 @@ println("Check matching: ", sum(abs.(a1[join.match1] .- a2[join.match2])) == 0)
 
 
 
-## The `signdist` function
+## The `signdiff` function
 
-The sort order of input arrays and the hints to optimize the join are provided by the `signdist` function, which in the default implementation is simply:
+The sort order of input arrays and the hints to optimize the join are provided by the `signdiff` function, which in the default implementation is simply:
 ```
-function signdist(vec1, vec2, i1, i2)
+function signdiff(vec1, vec2, i1, i2)
     return sign(vec1[i1] - vec2[i2])
 end
 ```
-i.e. it returns the *sign* of the *distance* between the `i1`-th element in the `vec1` vector and the the `i2`-th element in the `vec2` vector.  This function works perfectly when the data to be matched are numbers stored in unidimensional arrays.  However, the user may provide customized version of the `signdist` function, to handle **any** type of data, including multidimensional arrays, [dataframes](https://github.com/JuliaData/DataFrames.jl), user defined types etc.  In the following sections we will show two examples.
+i.e. it returns the *sign* of the *difference* between the `i1`-th element in the `vec1` vector and the the `i2`-th element in the `vec2` vector.  This function works perfectly when the data to be matched are numbers stored in unidimensional arrays.  However, the user may provide customized version of the `signdiff` function, to handle **any** type of data, including multidimensional arrays, [dataframes](https://github.com/JuliaData/DataFrames.jl), user defined types etc.  In the following sections we will show two examples.
 
 
-The `signdist` function, both the default one or the customized ones, must accept at least four arguments:
+The `signdiff` function, both the default one or the customized ones, must accept at least four arguments:
 - the first *container*;
 - the second *container*;
 - the index in the first container of the element to be compared;
 - the index in the second container of the element to be compared;
 
-If the `signdist` function accepts more than 4 arguments, they must be passed as arguments to the main `sortdist` function.
+If the `signdiff` function accepts more than 4 arguments, they must be passed as arguments to the main `sortdist` function.
 
 The return value must be as follows:
 - **0**: the two elements match, and their index will be added to the output `match1` and `match2` vectors;
@@ -78,14 +78,14 @@ The return value must be as follows:
 - **1**: the element in the first container is *greater* than the element in the second container;
 - any other integer number: there is no order relation between the two elements.
 
-The last case allows to join data also when there is no clear order relations between the elements.  In the most general case the user provided `signdist` function will returns only **0** (matching elements) and a number different from **-1** and **1** (non-matching elements).  In this case the `sortjoin` function will actually perform a cross-join, i.e. it will compare all elements from the first container with all the elements from the second, resulting in very poor performances.
+The last case allows to join data also when there is no clear order relations between the elements.  In the most general case the user provided `signdiff` function will returns only **0** (matching elements) and a number different from **-1** and **1** (non-matching elements).  In this case the `sortjoin` function will actually perform a cross-join, i.e. it will compare all elements from the first container with all the elements from the second, resulting in very poor performances.
 
 
 
 
 
 ## Using 2D arrays as input
-Suppose we want to join arrays containing geographical coordinates, latitude and longitude.  We will use the `gcirc` function in the [Astrolib](https://github.com/JuliaAstro/AstroLib.jl) package to calculate the  great circle arc distances between two points.
+Suppose we want to join arrays containing geographical coordinates, latitude and longitude.  We will use the `gcirc` function in the [Astrolib](https://github.com/JuliaAstro/AstroLib.jl) package to calculate the great circle arc distances between two points.
 
 ``` julia
 # Prepare input arrays
@@ -95,9 +95,9 @@ long1 = rand(  0:0.01:360, nn);
 lat2  = rand(-90:0.01:90 , nn);
 long2 = rand(  0:0.01:360, nn);
 
-# Define a customized `signdist` function.  Note that this function accepts a 5th argument, namely the distance threshold in arcsec below which two coordinates match.
+# Define a customized `signdiff` function.  Note that this function accepts a 5th argument, namely the distance threshold in arcsec below which two coordinates match.
 using AstroLib
-function signdist(c1, c2, i1, i2, thresh_arcsec)
+function signdiff(c1, c2, i1, i2, thresh_arcsec)
     thresh_deg = thresh_arcsec / 3600. # [deg]
     δ = c1[i1, 1] - c2[i2, 1]
     (δ < -thresh_deg)  &&  (return -1)
@@ -106,8 +106,8 @@ function signdist(c1, c2, i1, i2, thresh_arcsec)
     return 999
 end
 
-# Join the arrays.  Note that we passed the customized  `signdist` function as 3rd argument and the matching threshold as 4th argument.
-join = sortjoin([lat1 long1], [lat2 long2], signdist, 1.)
+# Join the arrays.  Note that we passed the customized  `signdiff` function as 3rd argument and the matching threshold as 4th argument.
+join = sortjoin([lat1 long1], [lat2 long2], signdiff, 1.)
 
 # Print the maximum arc distance in arcsec between all matched coordinates.  This must be smaller than 1.
 println(maximum(gcirc.(2, long1[join.match1], lat1[join.match1], long2[join.match2], lat2[join.match2])))
@@ -122,18 +122,18 @@ lat2  = lat2[ join.sort2]
 long2 = long2[join.sort2]
 
 # Join arrays skipping the pre-sort step (`skipsort=true`)
-join = sortjoin([lat1 long1], [lat2 long2], signdist, 1., skipsort=true)
+join = sortjoin([lat1 long1], [lat2 long2], signdiff, 1., skipsort=true)
 println(maximum(gcirc.(2, long1[join.match1], lat1[join.match1], long2[join.match2], lat2[join.match2])))
 ```
 Note that using the `skipsort=true` keyword on non-sorted input arrays may result in non-complete matching results.  However, no sorting check is performed (to avoid performance degradation), hence the user should use `skipsort=true` only when the input data are sorted beyond any doubt.
 
 
 ## Using DataFrames
-We may perform the join described above also if the data are stored in a [dataframe](https://github.com/JuliaData/DataFrames.jl), by providing a suitable `signdist` function:
+We may perform the join described above also if the data are stored in a [dataframe](https://github.com/JuliaData/DataFrames.jl), by providing a suitable `signdiff` function:
 
 ``` julia
 using DataFrames
-function signdist(coord1, coord2, i1, i2, thresh_arcsec)
+function signdiff(coord1, coord2, i1, i2, thresh_arcsec)
     thresh_deg = thresh_arcsec / 3600. # [deg]
     δ = coord1[i1, :lat] - coord2[i2, :lat]
     (δ < -thresh_deg)  &&  (return -1)
@@ -146,7 +146,7 @@ end
 coord1 = DataFrame(:lat => lat1, :long => long1)
 coord2 = DataFrame(:lat => lat2, :long => long2)
 
-# Join using the customized `signdist` function.  Note that the data were already sorted, hence we use `skipsort=true`
-join = sortjoin(coord1, coord2, signdist, 1., skipsort=true)
+# Join using the customized `signdiff` function.  Note that the data were already sorted, hence we use `skipsort=true`
+join = sortjoin(coord1, coord2, signdiff, 1., skipsort=true)
 println(maximum(gcirc.(2, coord1[join.match1, :long], coord1[join.match1, :lat], coord2[join.match2, :long], coord2[join.match2, :lat])))
 ```

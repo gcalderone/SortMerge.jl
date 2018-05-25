@@ -24,13 +24,13 @@ function show(stream::IO, j::sortjoinResult)
 end
 
 
-# Default signdist function
-function signdist(vec1, vec2, i1, i2)
+# Default signdiff function
+function signdiff(vec1, vec2, i1, i2)
     return sign(vec1[i1] - vec2[i2])
 end
 
 
-function sortjoin(vec1, vec2, signdist=signdist, args...; skipsort=false)
+function sortjoin(vec1, vec2, signdiff=signdiff, args...; skipsort=false)
     elapsed = (Base.time_ns)()
     size1 = size(vec1)[1]
     size2 = size(vec2)[1]
@@ -38,8 +38,8 @@ function sortjoin(vec1, vec2, signdist=signdist, args...; skipsort=false)
     sort1 = Int.(linspace(1, size1, size1))
     sort2 = Int.(linspace(1, size2, size2))
     if !skipsort
-        sort1 = sortperm(sort1, lt=(i, j) -> (signdist(vec1, vec1, i, j, args...) == -1))
-        sort2 = sortperm(sort2, lt=(i, j) -> (signdist(vec2, vec2, i, j, args...) == -1))
+        sort1 = sortperm(sort1, lt=(i, j) -> (signdiff(vec1, vec1, i, j, args...) == -1))
+        sort2 = sortperm(sort2, lt=(i, j) -> (signdiff(vec2, vec2, i, j, args...) == -1))
     end
 
     i2a = 1
@@ -49,7 +49,7 @@ function sortjoin(vec1, vec2, signdist=signdist, args...; skipsort=false)
     for i1 in 1:size1
         for i2 in i2a:size2
             count += 1
-            sign::Int = signdist(vec1, vec2, sort1[i1], sort2[i2], args...) # sign(vec1 - vec2)
+            sign::Int = signdiff(vec1, vec2, sort1[i1], sort2[i2], args...) # sign(vec1 - vec2)
             if sign == 0
                 push!(match1, i1)
                 push!(match2, i2)
