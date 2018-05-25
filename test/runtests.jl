@@ -5,5 +5,26 @@ else
     using Test
 end
 
-# write your own tests here
-@test 1 == 2
+# --------------------------------------------------------------------
+a1 = [1,2,4,6,7,10]
+a2 = [2,3,5,9,10]
+j = sortjoin(a1, a2)
+@test length(j.match1) == 2
+@test length(j.match2) == 2
+@test j.match1[1] == 2
+@test j.match1[2] == 6
+@test j.match2[1] == 1
+@test j.match2[2] == 5
+
+# --------------------------------------------------------------------
+nn = 100000
+a1 = rand(1:nn, nn)
+a2 = rand(1:nn, nn)
+
+j = sortjoin(a1, a2)
+@test sum(abs.(a1[j.match1] .- a2[j.match2])) == 0
+
+sort!(a1)
+sort!(a2)
+j = sortjoin(a1, a2, skipsort=true)
+@test sum(abs.(a1[j.match1] .- a2[j.match2])) == 0
