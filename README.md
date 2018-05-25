@@ -122,13 +122,13 @@ lat2  = lat2[ join.sort2]
 long2 = long2[join.sort2]
 
 # Join arrays skipping the pre-sort step (`skipsort=true`)
-join = sortjoin([lat1 long1], [lat2 long2], signdist_coordinates, 1., skipsort=true)
+join = sortjoin([lat1 long1], [lat2 long2], signdist, 1., skipsort=true)
 println(maximum(gcirc.(2, long1[join.match1], lat1[join.match1], long2[join.match2], lat2[join.match2])))
 ```
 Note that using the `skipsort=true` keyword on non-sorted input arrays may result in non-complete matching results.  However, no sorting check is performed (to avoid performance degradation), hence the user should use `skipsort=true` only when the input data are sorted beyond any doubt.
 
 
-## Using 2D arrays as input
+## Using DataFrames
 We may perform the join described above also if the data are stored in a [dataframe](https://github.com/JuliaData/DataFrames.jl), by providing a suitable `signdist` function:
 
 ``` julia
@@ -146,7 +146,7 @@ end
 coord1 = DataFrame(:lat => lat1, :long => long1)
 coord2 = DataFrame(:lat => lat2, :long => long2)
 
-# Join using the customized  `signdist` function.
-join = sortjoin(coord1, coord2, signdist, 1.)
+# Join using the customized `signdist` function.  Note that the data were already sorted, hence we use `skipsort=true`
+join = sortjoin(coord1, coord2, signdist, 1., skipsort=true)
 println(maximum(gcirc.(2, coord1[join.match1, :long], coord1[join.match1, :lat], coord2[join.match2, :long], coord2[join.match2, :lat])))
 ```
