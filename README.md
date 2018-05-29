@@ -6,6 +6,13 @@
 
 The [Sort-merge join](https://en.wikipedia.org/wiki/Sort-merge_join) allows to **quickly** find the matching elements in two separate arrays or collections, regardless of the type of the container.
 
+### Installation
+```
+Pkg.add("SortJoin")
+```
+
+### Usage
+
 Consider the following arrays:
 ``` julia
 array1 = [1,2,4,6,7,10]
