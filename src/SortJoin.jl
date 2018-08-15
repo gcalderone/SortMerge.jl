@@ -1,7 +1,8 @@
 __precompile__(true)
 
-
 module SortJoin
+
+using Printf
 
 import Base.show
 export sortjoin
@@ -22,8 +23,8 @@ end
 
 
 function show(stream::IO, j::sortjoinResult)
-    @printf("Len. array 1 : %-12d  matched: %-12d (%5.1f%%)\n", j.size1, j.unique1, 100.*j.unique1/float(j.size1))
-    @printf("Len. array 2 : %-12d  matched: %-12d (%5.1f%%)\n", j.size2, j.unique2, 100.*j.unique2/float(j.size2))
+    @printf("Len. array 1 : %-12d  matched: %-12d (%5.1f%%)\n", j.size1, j.unique1, 100. * j.unique1/float(j.size1))
+    @printf("Len. array 2 : %-12d  matched: %-12d (%5.1f%%)\n", j.size2, j.unique2, 100. * j.unique2/float(j.size2))
     @printf("Matched items: %-12d\n", length(j.match1))
     @printf("Elapsed time : %-8.4g s", j.elapsed)
 end
@@ -40,16 +41,16 @@ function sortjoin(vec1, vec2, signdiff=signdiff, args...; skipsort=false, verbos
     size1 = size(vec1)[1]
     size2 = size(vec2)[1]
 
-    sort1 = Int.(linspace(1, size1, size1))
-    sort2 = Int.(linspace(1, size2, size2))
+    sort1 = Int.(range(1, stop=size1, length=size1))
+    sort2 = Int.(range(1, stop=size2, length=size2))
     if !skipsort
         sort1 = sortperm(sort1, lt=(i, j) -> (signdiff(true, vec1, vec1, i, j, args...)::Int == -1))
         sort2 = sortperm(sort2, lt=(i, j) -> (signdiff(true, vec2, vec2, i, j, args...)::Int == -1))
     end
 
     i2a = 1
-    match1 = Array{Int}(0)
-    match2 = Array{Int}(0)
+    match1 = Array{Int}(undef, 0)
+    match2 = Array{Int}(undef, 0)
     completed = 0.
     lastlog = -1.
     for i1 in 1:size1
@@ -81,15 +82,14 @@ function sortjoin(vec1, vec2, signdiff=signdiff, args...; skipsort=false, verbos
     match1 = sort1[match1]
     match2 = sort2[match2]
 
-    
     unmatch1 = fill(true, size1)
     unmatch2 = fill(true, size2)
     u1 = unique(match1)
     u2 = unique(match2)
-    unmatch1[u1] = false
-    unmatch2[u2] = false
-    unmatch1 = find(unmatch1)
-    unmatch2 = find(unmatch2)
+    unmatch1[u1] .= false
+    unmatch2[u2] .= false
+    unmatch1 = findall(unmatch1)
+    unmatch2 = findall(unmatch2)
     elapsed = (Base.time_ns)() - elapsed
 
     return sortjoinResult(size1, size2, sort1, sort2, match1, match2, length(u1), length(u2), 

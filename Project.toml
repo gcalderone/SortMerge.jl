@@ -1,0 +1,13 @@
+name = "SortJoin"
+uuid = "dd90eda8-73b3-58fe-bba9-11b90838ef47"
+authors = ["Giorgio Calderone <giorgio.calderone@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
