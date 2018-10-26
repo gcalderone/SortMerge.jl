@@ -19,18 +19,12 @@ a2 = rand(1:nn, nn)
 
 j = sortjoin(a1, a2)
 @test sum(abs.(a1[j.match1] .- a2[j.match2])) == 0
-for i1 in j.unmatch1
-    for i2 in j.unmatch2
-	@test a1[i1] != a2[i2]
-    end
-end
+for i in 1:j.size1; @test j.countmap1[i] == length(findall(a1[i] .== a2)); end
+for i in 1:j.size2; @test j.countmap2[i] == length(findall(a2[i] .== a1)); end
 
 sort!(a1)
 sort!(a2)
 j = sortjoin(a1, a2, skipsort=true)
 @test sum(abs.(a1[j.match1] .- a2[j.match2])) == 0
-for i1 in j.unmatch1
-    for i2 in j.unmatch2
-	@test a1[i1] != a2[i2]
-    end
-end
+for i in 1:j.size1; @test j.countmap1[i] == length(findall(a1[i] .== a2)); end
+for i in 1:j.size2; @test j.countmap2[i] == length(findall(a2[i] .== a1)); end

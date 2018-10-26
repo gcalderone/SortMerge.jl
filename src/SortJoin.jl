@@ -2,29 +2,33 @@ __precompile__(true)
 
 module SortJoin
 
-using Printf
+using Printf, StatsBase
 
 import Base.show
 export sortjoin
 
-struct sortjoinResult 
+struct SortJoinResult
     size1::Int
     size2::Int
     sort1::Vector{Int}
     sort2::Vector{Int}
     match1::Vector{Int}
     match2::Vector{Int}
-    unique1::Int
-    unique2::Int
-    unmatch1::Vector{Int}
-    unmatch2::Vector{Int}
+    countmap1::Vector{Int}
+    countmap2::Vector{Int}
+    count_unmatch1::Int
+    count_unmatch2::Int
+    count_unique1::Int
+    count_unique2::Int
+    count_multi1::Int
+    count_multi2::Int
     elapsed::Float64
 end
 
 
-function show(stream::IO, j::sortjoinResult)
-    @printf("Len. array 1 : %-12d  matched: %-12d (%5.1f%%)\n", j.size1, j.unique1, 100. * j.unique1/float(j.size1))
-    @printf("Len. array 2 : %-12d  matched: %-12d (%5.1f%%)\n", j.size2, j.unique2, 100. * j.unique2/float(j.size2))
+function show(stream::IO, j::SortJoinResult)
+    @printf("Len. array 1 : %-12d  matched: %-12d (%5.1f%%)\n", j.size1, j.count_unique1, 100. * j.count_unique1/float(j.size1))
+    @printf("Len. array 2 : %-12d  matched: %-12d (%5.1f%%)\n", j.size2, j.count_unique2, 100. * j.count_unique2/float(j.size2))
     @printf("Matched items: %-12d\n", length(j.match1))
     @printf("Elapsed time : %-8.4g s", j.elapsed)
 end
@@ -82,18 +86,18 @@ function sortjoin(vec1, vec2, signdiff=signdiff, args...; skipsort=false, verbos
     match1 = sort1[match1]
     match2 = sort2[match2]
 
-    unmatch1 = fill(true, size1)
-    unmatch2 = fill(true, size2)
-    u1 = unique(match1)
-    u2 = unique(match2)
-    unmatch1[u1] .= false
-    unmatch2[u2] .= false
-    unmatch1 = findall(unmatch1)
-    unmatch2 = findall(unmatch2)
-    elapsed = (Base.time_ns)() - elapsed
-
-    return sortjoinResult(size1, size2, sort1, sort2, match1, match2, length(u1), length(u2), 
-                          unmatch1, unmatch2, elapsed / 1.e9)
+    dcm1 = countmap(match1)
+    dcm2 = countmap(match2)
+    cm1 = fill(0, size1)
+    cm2 = fill(0, size2)
+    for (key, val) in dcm1; cm1[key] = val; end
+    for (key, val) in dcm2; cm2[key] = val; end
+    ret = SortJoinResult(size1, size2, sort1, sort2, match1, match2, cm1, cm2,
+                         length(findall(cm1 .== 0)), length(findall(cm2 .== 0)),
+                         length(findall(cm1 .== 1)), length(findall(cm2 .== 1)),
+                         length(findall(cm1 .>= 2)), length(findall(cm2 .>= 2)),
+                         ((Base.time_ns)() - elapsed) / 1.e9)
+    return ret
 end
 
 end # module
