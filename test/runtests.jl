@@ -1,4 +1,4 @@
-using SortJoin
+using SortJoin, Random
 using Test
 
 # --------------------------------------------------------------------
@@ -13,9 +13,9 @@ j = sortjoin(a1, a2)
 @test j.match2[2] == 5
 
 # --------------------------------------------------------------------
-nn = 10000
-a1 = rand(1:nn, nn)
-a2 = rand(1:nn, nn)
+nn = 10_000
+a1 = rand(MersenneTwister(0), 1:nn, nn)
+a2 = rand(MersenneTwister(1), 1:nn, nn)
 
 j = sortjoin(a1, a2)
 @test sum(abs.(a1[j.match1] .- a2[j.match2])) == 0

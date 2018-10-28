@@ -34,13 +34,11 @@ function show(stream::IO, j::SortJoinResult)
 end
 
 
-# Default signdiff function
-function signdiff(sorting, vec1, vec2, i1, i2)
-    return sign(vec1[i1] - vec2[i2])
-end
+function sortjoin(vec1, vec2, args...;
+                  lt=(v1, v2, i1, i2) -> (v1[i1] < v2[i2]),
+                  signdiff=(v1, v2, i1, i2) -> (sign(v1[i1] - v2[i2])),
+                  skipsort=false, verbose=false)
 
-
-function sortjoin(vec1, vec2, signdiff=signdiff, args...; skipsort=false, verbose=false)
     elapsed = (Base.time_ns)()
     size1 = size(vec1)[1]
     size2 = size(vec2)[1]
@@ -48,8 +46,8 @@ function sortjoin(vec1, vec2, signdiff=signdiff, args...; skipsort=false, verbos
     sort1 = Int.(range(1, stop=size1, length=size1))
     sort2 = Int.(range(1, stop=size2, length=size2))
     if !skipsort
-        sort1 = sortperm(sort1, lt=(i, j) -> (signdiff(true, vec1, vec1, i, j, args...)::Int == -1))
-        sort2 = sortperm(sort2, lt=(i, j) -> (signdiff(true, vec2, vec2, i, j, args...)::Int == -1))
+        sort1 = sortperm(sort1, lt=(i, j) -> lt(vec1, vec1, i, j))
+        sort2 = sortperm(sort2, lt=(i, j) -> lt(vec2, vec2, i, j))
     end
 
     i2a = 1
@@ -60,34 +58,36 @@ function sortjoin(vec1, vec2, signdiff=signdiff, args...; skipsort=false, verbos
     for i1 in 1:size1
         for i2 in i2a:size2
             # Logging
-            completed = ceil(1000. * ((i1-1) * size2 + i2) / (size1 * size2))
             if verbose
+                completed = ceil(1000. * ((i1-1) * size2 + i2) / (size1 * size2))
                 if completed > lastlog
                     @printf("Completed: %5.1f%%, matched: %d \r", completed/10., length(match1))
                     lastlog = completed
                 end
             end
 
-            sign::Int = signdiff(false, vec1, vec2, sort1[i1], sort2[i2], args...) # sign(vec1 - vec2)
-            if sign == 0
-                push!(match1, i1)
-                push!(match2, i2)
-                continue
-            elseif sign ==  1
-                i2a += 1
-            elseif sign == -1
-                break
+            j1 = sort1[i1]
+            j2 = sort2[i2]
+            if length(args) > 0  # This improves performances
+                dd = Int(signdiff(vec1, vec2, j1, j2, args...))
+            else
+                dd = Int(signdiff(vec1, vec2, j1, j2))
+            end
+                
+            if     dd == -1; break
+            elseif dd ==  1; i2a += 1
+            elseif dd ==  0
+                push!(match1, j1)
+                push!(match2, j2)
             end
         end
     end
     if verbose
         @printf("Completed: %5.1f%%, matched: %d \n", 100., length(match1))
     end
-    match1 = sort1[match1]
-    match2 = sort2[match2]
 
-    dcm1 = countmap(match1)
-    dcm2 = countmap(match2)
+    dcm1 = Dict{Int,Int}(); (length(match1) > 0)  &&  (dcm1 = countmap(match1))
+    dcm2 = Dict{Int,Int}(); (length(match2) > 0)  &&  (dcm2 = countmap(match2))
     cm1 = fill(0, size1)
     cm2 = fill(0, size2)
     for (key, val) in dcm1; cm1[key] = val; end
