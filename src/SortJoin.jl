@@ -5,34 +5,35 @@ module SortJoin
 using Printf, StatsBase
 
 import Base.show
-export sortjoin
+import Base.sortperm
+import StatsBase.countmap
+
+export sortjoin, sortperm, matched, countmap
 
 struct SortJoinResult
-    size1::Int
-    size2::Int
-    sort1::Vector{Int}
-    sort2::Vector{Int}
-    match1::Vector{Int}
-    match2::Vector{Int}
-    countmap1::Vector{Int}
-    countmap2::Vector{Int}
-    count_unmatch1::Int
-    count_unmatch2::Int
-    count_unique1::Int
-    count_unique2::Int
-    count_multi1::Int
-    count_multi2::Int
+    size::Int
+    sort::Vector{Int}
+    match::Vector{Int}
     elapsed::Float64
 end
 
 
 function show(stream::IO, j::SortJoinResult)
-    @printf("Len. array 1 : %-12d  matched: %-12d (%5.1f%%)\n", j.size1, j.count_unique1, 100. * j.count_unique1/float(j.size1))
-    @printf("Len. array 2 : %-12d  matched: %-12d (%5.1f%%)\n", j.size2, j.count_unique2, 100. * j.count_unique2/float(j.size2))
-    @printf("Matched items: %-12d\n", length(j.match1))
+    u1 = length(unique(j.match))
+    @printf("Len. array   : %-12d  matched: %-12d (%5.1f%%)\n", j.size, u1, 100. * u1/float(j.size))
+    @printf("Matched items: %-12d\n", length(j.match))
     @printf("Elapsed time : %-8.4g s", j.elapsed)
 end
 
+function show(stream::IO, j::NTuple{2,SortJoinResult})
+    @assert length(j[1].match) == length(j[2].match)
+    u1 = length(unique(j[1].match))
+    u2 = length(unique(j[2].match))
+    @printf("Len. array 1 : %-12d  matched: %-12d (%5.1f%%)\n", j[1].size, u1, 100. * u1/float(j[1].size))
+    @printf("Len. array 2 : %-12d  matched: %-12d (%5.1f%%)\n", j[2].size, u2, 100. * u2/float(j[2].size))
+    @printf("Matched items: %-12d\n", length(j[1].match))
+    @printf("Elapsed time : %-8.4g s", j[1].elapsed)
+end
 
 function sortjoin(vec1, vec2, args...;
                   lt=(v1, v2, i1, i2) -> (v1[i1] < v2[i2]),
@@ -73,7 +74,7 @@ function sortjoin(vec1, vec2, args...;
             else
                 dd = Int(signdiff(vec1, vec2, j1, j2))
             end
-                
+            
             if     dd == -1; break
             elseif dd ==  1; i2a += 1
             elseif dd ==  0
@@ -86,18 +87,41 @@ function sortjoin(vec1, vec2, args...;
         @printf("Completed: %5.1f%%, matched: %d \n", 100., length(match1))
     end
 
-    dcm1 = Dict{Int,Int}(); (length(match1) > 0)  &&  (dcm1 = countmap(match1))
-    dcm2 = Dict{Int,Int}(); (length(match2) > 0)  &&  (dcm2 = countmap(match2))
-    cm1 = fill(0, size1)
-    cm2 = fill(0, size2)
-    for (key, val) in dcm1; cm1[key] = val; end
-    for (key, val) in dcm2; cm2[key] = val; end
-    ret = SortJoinResult(size1, size2, sort1, sort2, match1, match2, cm1, cm2,
-                         length(findall(cm1 .== 0)), length(findall(cm2 .== 0)),
-                         length(findall(cm1 .== 1)), length(findall(cm2 .== 1)),
-                         length(findall(cm1 .>= 2)), length(findall(cm2 .>= 2)),
-                         ((Base.time_ns)() - elapsed) / 1.e9)
-    return ret
+    elapsed = ((Base.time_ns)() - elapsed) / 1.e9
+    ret1 = SortJoinResult(size1, sort1, match1, elapsed)
+    ret2 = SortJoinResult(size2, sort2, match2, elapsed)
+    return (ret1, ret2)
+end
+
+
+function countmap(res::SortJoinResult)
+    dcm = Dict{Int,Int}()
+    (length(res.match) > 0)  &&  (dcm = countmap(res.match))
+    cm = fill(0, res.size)
+    for i in 1:res.size
+        haskey(dcm, i)  &&  (cm[i] = dcm[i])
+    end
+    return cm
+end
+
+sortperm(res::SortJoinResult) = res.sort
+function matched(res::SortJoinResult, times::Int=1)
+    @assert times >= 0
+    (times == 1)  &&  (return res.match)
+    return findall(countmap(res) .== times)
+end
+
+function matched(res1::SortJoinResult, res2::SortJoinResult, times::Int=1)
+    @assert times >= 0
+    if times == 0
+        return (findall(countmap(res1) .== 0), findall(countmap(res2) .== 0))
+    end
+    if times == 1
+        return (res1.match, res2.match)
+    end
+    ii = findall(countmap(res1) .== times)
+    (q1, q2) = sortjoin(ii, res1.match)
+    return (ii[q1.match], res2.match[q2.match])
 end
 
 end # module

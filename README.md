@@ -31,9 +31,9 @@ display([array1[join.match1] array2[join.match2]])
 The index for the unmatched elements in both arrays are stored in the `unmatch1` and `unmatch2` fields:
 ``` julia
 println("Unmatched elements in array 1:")
-println(array1[join.unmatch1])
+println(array1[findall(join.countmap1 .== 0)])
 println("Unmatched elements in array 2:")
-println(array2[join.unmatch2])
+println(array2[findall(join.countmap2 .== 0)])
 ```
 
 A more computational intensive example is as follows:
@@ -60,7 +60,7 @@ println("Check matching: ", sum(abs.(a1[join.match1] .- a2[join.match2])) == 0)
 
 
 
-## The `signdiff` function
+## The `lt` and `signdiff` function
 
 The sort order of input arrays and the hints to optimize the join are provided by the `signdiff` function, which in the default implementation is simply:
 ```
@@ -96,7 +96,7 @@ Suppose we want to join arrays containing geographical coordinates, latitude and
 
 ``` julia
 # Prepare input arrays
-nn = 100000
+nn = 1_000_000
 lat1  = rand(-90:0.01:90 , nn);
 long1 = rand(  0:0.01:360, nn);
 lat2  = rand(-90:0.01:90 , nn);
@@ -104,17 +104,19 @@ long2 = rand(  0:0.01:360, nn);
 
 # Define a customized `signdiff` function.  Note that this function accepts a 5th argument, namely the distance threshold in arcsec below which two coordinates match.
 using AstroLib
-function signdiff(c1, c2, i1, i2, thresh_arcsec)
-    thresh_deg = thresh_arcsec / 3600. # [deg]
-    δ = c1[i1, 1] - c2[i2, 1]
-    (δ < -thresh_deg)  &&  (return -1)
-    (δ >  thresh_deg)  &&  (return  1)
-    (gcirc(2, c1[i1, 2], c1[i1, 1], c2[i2, 2], c2[i2, 1]) < thresh_arcsec)  &&  (return 0)
+aa(c1, c2, i1, i2) = ((c1[i1, 2] - c2[i2, 2]) < 0)
+function signdiff(c1, c2, i1, i2, thresh_asec)
+    thresh_deg = thresh_asec / 3600. # [deg]
+    dd = c1[i1, 2] - c2[i2, 2]
+    (dd < -thresh_deg)  &&  (return -1)
+    (dd >  thresh_deg)  &&  (return  1)
+    dd = gcirc(2, c1[i1, 1], c1[i1, 2], c2[i2, 1], c2[i2, 2])
+    (dd < thresh_asec)  &&  (return 0)
     return 999
 end
-
+ 
 # Join the arrays.  Note that we passed the customized  `signdiff` function as 3rd argument and the matching threshold as 4th argument.
-join = sortjoin([lat1 long1], [lat2 long2], signdiff, 1.)
+jj = sortjoin([lat1 long1], [lat2 long2], lt=aa, signdiff=signdiff, 1.)
 
 # Print the maximum arc distance in arcsec between all matched coordinates.  This must be smaller than 1.
 println(maximum(gcirc.(2, long1[join.match1], lat1[join.match1], long2[join.match2], lat2[join.match2])))
