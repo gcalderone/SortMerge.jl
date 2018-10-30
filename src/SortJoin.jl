@@ -7,7 +7,6 @@ using Printf
 import Base.show
 import Base.sortperm
 import Base.indices
-import StatsBase.countmap
 import Base.iterate, Base.length, Base.size, Base.getindex,
        Base.firstindex,  Base.lastindex, Base.IndexStyle
 

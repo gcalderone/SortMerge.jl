@@ -11,8 +11,8 @@ j = sortjoin(a1, a2)
 @test j[1][2] == 6
 @test j[2][1] == 1
 @test j[2][2] == 5
-@test a1[index(j[1], 0)] == [1, 4, 6, 7]
-@test a2[index(j[2], 0)] == [3, 5, 9]
+@test a1[indices(j[1], 0)] == [1, 4, 6, 7]
+@test a2[indices(j[2], 0)] == [3, 5, 9]
 
 # --------------------------------------------------------------------
 nn = 1_0_000
@@ -25,14 +25,14 @@ j = sortjoin(a1, a2)
 cm = countmap(j[1]); for i in 1:length(cm); @test cm[i] == length(findall(a1[i] .== a2)); end
 cm = countmap(j[2]); for i in 1:length(cm); @test cm[i] == length(findall(a2[i] .== a1)); end
 
-println(a1[index(j[1], 8)])
-(k1, k2) = index(j, 8);
+println(a1[indices(j[1], 8)])
+(k1, k2) = indices(j, 8);
 println(a1[k1])
 println(a2[k2])
 @test sum(abs.(a1[k1] .- a2[k2])) == 0
 
-k1 = index(j[1], 0);
-k2 = index(j[2], 0);
+k1 = indices(j[1], 0);
+k2 = indices(j[2], 0);
 for i in k1; @test length(findall(a1[i] .== a2)) == 0; end
 for i in k2; @test length(findall(a2[i] .== a1)) == 0; end
 
