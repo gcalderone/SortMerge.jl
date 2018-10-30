@@ -2,37 +2,47 @@ __precompile__(true)
 
 module SortJoin
 
-using Printf, StatsBase
+using Printf
 
 import Base.show
 import Base.sortperm
+import Base.indices
 import StatsBase.countmap
+import Base.iterate, Base.length, Base.size, Base.getindex,
+       Base.firstindex,  Base.lastindex, Base.IndexStyle
 
-export sortjoin, sortperm, matched, countmap
+export sortjoin, sortperm, indices, countmap
 
-struct SortJoinResult
+struct Result <: AbstractArray{Int, 1}
     size::Int
     sort::Vector{Int}
     match::Vector{Int}
+    countmap::Vector{Int}
+    count::Int
     elapsed::Float64
 end
 
-
-function show(stream::IO, j::SortJoinResult)
+iterate(jj::Result, state=1) = state > length(jj.match) ? nothing : (jj.match[state], state+1)
+length(jj::Result) = length(jj.match)
+size(jj::Result) = (length(jj.match),)
+getindex(jj::Result, i)	= jj.match[i]
+firstindex(jj::Result) = 1
+lastindex(jj::Result) = length(jj.match)
+IndexStyle(Result::Type) = IndexLinear()
+    
+function show(stream::IO, j::Result)
     u1 = length(unique(j.match))
-    @printf("Len. array   : %-12d  matched: %-12d (%5.1f%%)\n", j.size, u1, 100. * u1/float(j.size))
-    @printf("Matched items: %-12d\n", length(j.match))
-    @printf("Elapsed time : %-8.4g s", j.elapsed)
+    @printf("Len. array  : %-9d  matched indices: %-9d (%5.1f%%)  max multiplicity: %-9d\n", j.size, u1, 100. * u1/float(j.size), maximum(j.countmap))
 end
 
-function show(stream::IO, j::NTuple{2,SortJoinResult})
+function show(stream::IO, j::NTuple{2,Result})
     @assert length(j[1].match) == length(j[2].match)
     u1 = length(unique(j[1].match))
     u2 = length(unique(j[2].match))
-    @printf("Len. array 1 : %-12d  matched: %-12d (%5.1f%%)\n", j[1].size, u1, 100. * u1/float(j[1].size))
-    @printf("Len. array 2 : %-12d  matched: %-12d (%5.1f%%)\n", j[2].size, u2, 100. * u2/float(j[2].size))
-    @printf("Matched items: %-12d\n", length(j[1].match))
-    @printf("Elapsed time : %-8.4g s", j[1].elapsed)
+    @printf("Len. array 1: %-9d  matched indices: %-9d (%5.1f%%), max multipl.: %-9d\n", j[1].size, u1, 100. * u1/float(j[1].size), maximum(j[1].countmap))
+    @printf("Len. array 2: %-9d  matched indices: %-9d (%5.1f%%), max multipl.: %-9d\n", j[2].size, u2, 100. * u2/float(j[2].size), maximum(j[2].countmap))
+    @printf("#comparisons: %-9d  matched pairs  : %-9d (%5.1f%%)\n", j[1].count, length(j[1].match), 100. * length(j[1].match) / float(j[1].count))
+    @printf("Elapsed time: %-8.4g s", j[1].elapsed)
 end
 
 function sortjoin(vec1, vec2, args...;
@@ -54,11 +64,13 @@ function sortjoin(vec1, vec2, args...;
     i2a = 1
     match1 = Array{Int}(undef, 0)
     match2 = Array{Int}(undef, 0)
-    completed = 0.
+    cm1 = fill(0, size1)
+    cm2 = fill(0, size2)
+
     lastlog = -1.
+    count = 0
     for i1 in 1:size1
         for i2 in i2a:size2
-            # Logging
             if verbose
                 completed = ceil(1000. * ((i1-1) * size2 + i2) / (size1 * size2))
                 if completed > lastlog
@@ -74,12 +86,15 @@ function sortjoin(vec1, vec2, args...;
             else
                 dd = Int(signdiff(vec1, vec2, j1, j2))
             end
+            count += 1
             
             if     dd == -1; break
             elseif dd ==  1; i2a += 1
             elseif dd ==  0
                 push!(match1, j1)
                 push!(match2, j2)
+                cm1[j1] += 1
+                cm2[j2] += 1
             end
         end
     end
@@ -88,38 +103,31 @@ function sortjoin(vec1, vec2, args...;
     end
 
     elapsed = ((Base.time_ns)() - elapsed) / 1.e9
-    ret1 = SortJoinResult(size1, sort1, match1, elapsed)
-    ret2 = SortJoinResult(size2, sort2, match2, elapsed)
+    ret1 = Result(size1, sort1, match1, cm1, count, elapsed)
+    ret2 = Result(size2, sort2, match2, cm2, count, elapsed)
     return (ret1, ret2)
 end
 
 
-function countmap(res::SortJoinResult)
-    dcm = Dict{Int,Int}()
-    (length(res.match) > 0)  &&  (dcm = countmap(res.match))
-    cm = fill(0, res.size)
-    for i in 1:res.size
-        haskey(dcm, i)  &&  (cm[i] = dcm[i])
-    end
-    return cm
+countmap(res::Result) = res.countmap
+sortperm(res::Result) = res.sort
+
+function indices(res::Result, multiplicity::Int=1)
+    @assert multiplicity >= 0
+    (multiplicity == 1)  &&  (return res.match)
+    return findall(res.countmap .== multiplicity)
 end
 
-sortperm(res::SortJoinResult) = res.sort
-function matched(res::SortJoinResult, times::Int=1)
-    @assert times >= 0
-    (times == 1)  &&  (return res.match)
-    return findall(countmap(res) .== times)
-end
-
-function matched(res1::SortJoinResult, res2::SortJoinResult, times::Int=1)
-    @assert times >= 0
-    if times == 0
-        return (findall(countmap(res1) .== 0), findall(countmap(res2) .== 0))
+indices(res::NTuple{2, Result}, multiplicity::Int=1; right=false) = indices(res..., multiplicity, right=right)
+function indices(res1::Result, res2::Result, multiplicity::Int=1; right=false)
+    @assert multiplicity >= 1
+    (multiplicity == 1)  &&  (return (res1.match, res2.match))
+    if right
+        ii = findall(res2.countmap .== multiplicity)
+        (q1, q2) = sortjoin(ii, res2.match)
+        return (res1.match[q2.match], ii[q1.match])
     end
-    if times == 1
-        return (res1.match, res2.match)
-    end
-    ii = findall(countmap(res1) .== times)
+    ii = findall(res1.countmap .== multiplicity)
     (q1, q2) = sortjoin(ii, res1.match)
     return (ii[q1.match], res2.match[q2.match])
 end
