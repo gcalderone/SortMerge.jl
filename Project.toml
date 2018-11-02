@@ -1,4 +1,4 @@
-name = "SortJoin"
+name = "SortMerge"
 uuid = "dd90eda8-73b3-58fe-bba9-11b90838ef47"
 authors = ["Giorgio Calderone <giorgio.calderone@gmail.com>"]
 version = "0.1.0"
