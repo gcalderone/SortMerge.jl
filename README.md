@@ -4,7 +4,7 @@
 
 ## A Julia implementation of the Sort-merge algorithm.
 
-The [Sort-merge join](https://en.wikipedia.org/wiki/Sort-merge_join) allows to **quickly** find the matching pairs in two separate arrays or collections.  The best performances are obtained when the input data are already ordered, but the algorithm is able to sort the data if they are not.
+The [Sort-merge join](https://en.wikipedia.org/wiki/Sort-merge_join) algorithm allows to **quickly** find the matching pairs in two separate arrays or collections.  The best performances are obtained when the input data are already ordered, but the algorithm is able to sort the data if they are not.
 
 The algorithm works out of the box with arrays of numbers, but it can also be used with any data type stored in any type of container.  Also, it can handle customized sorting and matching criteria.
 
@@ -87,32 +87,33 @@ end
 A more computationally demanding example is as follows:
 ``` julia
 nn = 1_000_000
-a1 = rand(MersenneTwister(0), 1:nn, nn);
-a2 = rand(MersenneTwister(1), 1:nn, nn);
-j = sortmerge(a1, a2, verbose=true)
+a1 = rand(1:nn, nn);
+a2 = rand(1:nn, nn);
+j = sortmerge(a1, a2)
 println("Check matching: ", sum(abs.(a1[j[1]] .- a2[j[2]])) == 0)
 ```
 where the purpose of the last line is just to perform a simple check on the matched pairs.  The `verbose=true` keyword is used to print a progress status.
 
 The default `show` method for the tuple returned by `sortmerge` report a few details of the matching process and may help in improving the performances. E.g., for the previous example:
 ```
-Input A:     632487 /   1000000  ( 63.2%) - max mult. 8         #lt1   46093220
-Input B:     632502 /   1000000  ( 63.3%) - max mult. 9         #lt2   45496744
-Output :    1001113     missed: 0                               #sd     3001111
-Elapsed: 1.07 s  (sort: 0.8, match: 0.204, overhead: 0.0621)
+Input A:     631879 /    1000000  ( 63.19%) - max mult. 8
+Input B:     631306 /    1000000  ( 63.13%) - max mult. 9
+Missed :          0 /    2998894  (  0.00%) -   Output  998896
+Elapsed: 0.94 s  (sort: 0.668, match: 0.202, overhead: 0.0703)
 ```
 The lines marked with `Input A` and `Input B` report:
 - the number of indices for which a matching pair has been found;
 - the total number of elements in input array;
 - the fraction of indices for which a matching pair has been found;
 - the maximum multiplicity;
-- the number of times two numbers have been compared to sort the input array;
 
 The line marked with `Output` reports:
-- the number of matched pairs;
-- the number of *missed* match (see below).  The smaller this number, the better the performances;
-- the number of times two entries have been checked for a possible match.  This number is typically much smaller than the total number of possible pairs in the input arrays (10^12 in the previous example).  This is why the algorithm provides very good performances.
-- the total elapsed time, and the amount of time spent while sorting the input arrays, searching for mathing pairs, and for the algorithm overhead.
+- the number of *missed match* (see below).  The smaller this number, the better the performances;
+- the number of times two entries have been checked for a possible match.  This number is typically much smaller than the total number of possible pairs in the input arrays (10^12 in the previous example).  This is why the algorithm provides very good performances;
+- the fraction of *missed match*;
+- the number of matched pairs in the output.
+
+The last line reports the total elapsed time, and the amount of time spent while sorting the input arrays, searching for mathing pairs, and for the algorithm overhead.
 
 Typically most of the time is spent sorting the input arrays, hence the algorithm will provide much better performances if the arrays are already sorted.  Since the order is so important, and it is calculated during a call to `sortmerge`, it will not be thrown away but returned in the result.  Hence if we are going to call again `sortmerge` we can take advantage of the previous calculation and rearrange the input arrays in sorted order:
 ``` julia
@@ -131,34 +132,39 @@ j = sortmerge(sorted1, sorted2, sorted=true)
 
 As anticipated, the **SortMerge** package can handle any data type stored in any type of container, as well as customized sorting and matching criteria, by providing customized functions for sorting and matching elements.
 
+### Custom sorting function
+
 The custom sorting functions must accept three arguments:
 - the container;
 - the index of the first element to be compared;
 - the index of the second element to be compared;
-and must return a boolean value, `true` if the first element is smaller than the second, `false` otherwise.  The `sortmerge` accepts these function through the `lt1`, `lt2` keywords, to sort the first and second array respectively.
 
-The custom sorting function must accept at least four arguments:
+and must return a boolean value: `true` if the first element is smaller than the second, `false` otherwise.  The `sortmerge` accepts these functions through the `lt1`, `lt2` keywords, to sort the first and second array respectively.
+
+### Custom matching function
+
+The custom matching function must accept at least four arguments:
 - the first container;
 - the second container;
 - the index in the first container of the element to be compared;
 - the index in the second container of the element to be compared.
 
-If the function accepts more than 4 arguments they must be passed as further arguments in the main `sortdist` call.  Note that when this function is called the two input containers are already sorted according to the `lt1` and `lt2` functions.
+If the function accepts more than 4 arguments they must be passed as further arguments in the main `sortmerge` call.  Note that when this function is called the two input containers are already sorted according to the `lt1` and `lt2` functions.
 
 The return value must be an integer with the following meaning:
-- **0**: the two elements match, and their index will be added to the final output;
+- **0**: the two elements match;
 - **-1**: the element in the first container do not match with the element in the second container, and will not match with any of the remaining elements in the second container;
 - **1**: the element in the first container do not match with the element in the second container, and will not match with any of the previous elements in the second container;
-- any other integer number: none of the above applies.
+- any other integer number: none of the above applies (*missed match* case).
 
-The **-1** and **1** return values are very important *hints* which allow `sortmerge` to  avoid checking for a match that will never occur, ultimately resulting in very short execution times.  The last case (any integer number different from -1, 0 and 1) allows to easily implement range matching criteria.
+The **-1** and **1** return values are very important *hints* which allow `sortmerge` to  avoid checking for a match that will never occur, ultimately resulting in very short execution times.  The *missed match* case (any integer number different from -1, 0 and 1) allows to deal with partial order relations and complex matching criteria.
 
-The `sortmerge` accept this function through the `sd` (*Sign of the Difference*) keyword.  The name stem from the fact that for array of numbers this function should return the sign of the difference of two numbers.
+The `sortmerge` accept this function through the `sd` (*Sign of the Difference*) keyword.  The name stem from the fact that for array of numbers this function should simply return the sign of the difference of two numbers.
 
 The following sections will provide a few examples.
 
 
-### Use with [dataframes](https://github.com/JuliaData/DataFrames.jl)
+### Use with [data frames](https://github.com/JuliaData/DataFrames.jl)
 
 The following example shows how to match two data frames objects, according to the numbers in a specific column:
 ```julia
@@ -187,23 +193,84 @@ end
 Here we defined two custom `lt1` and `lt2` functions to sort the `numbers` and `prime` vector respectively, and a custom `sd` function which uses the appropriate column names (`:n` and `:p`) for comparison.
 
 
-### Range matching using complex numbers
+### Match arrays of complex numbers
 
-The following example shows how to match two arrays of complex numbers, based on the distance if they are closer than a given threshold:
+The following example shows how to match two arrays of complex numbers, according to their distance in the complex plane.  Unlike real numbers, there is no complete order relation for the complex number, hence we must provide a custom sorting criteria.  Among the many possible ones, here we will simply sort the arrays according to their real part.  Also, we will define a custom `sd` function accepting a fifth argument, namely the `threshold` distance below which two numbers match.
 
+The code is:
 ```julia
 nn = 1_000_000
-a1 = rand(MersenneTwister(0), nn) .+ rand(MersenneTwister(1), nn) .* im;
-a2 = rand(MersenneTwister(2), nn) .+ rand(MersenneTwister(3), nn) .* im;
+a1 = rand(nn) .+ rand(nn) .* im;
+a2 = rand(nn) .+ rand(nn) .* im;
 
-lt = (v, i, j) -> (real(v[i]) < real(v[j]))
+lt(v, i, j) = (real(v[i]) < real(v[j]))
 function sd(v1, v2, i1, i2, threshold)
     d = (real(v1[i1]) - real(v2[i2])) / threshold
 	(abs(d) >= 1)  &&  (return sign(d))
     d = abs(v1[i1] - v2[i2]) / threshold
 	(d < 1)  &&  (return 0)
-	return 999
+	return 999 # missed match
 end
+j = sortmerge(a1, a2, 10. / nn, lt1=lt, lt2=lt, sd=sd)
+```
+Note that since the order relation is partial the `sd` function will sometime return a number different from -1, 0 and 1, resulting in the so called *missed match* condition (return value is 999).   In this example ~90% of `sd` calls result in a *missed match*, hence the worsen performance with respect to the previous example with real numbers.
 
-j = sortmerge(a1, a2, 1.e-5, lt1=lt, lt2=lt, sd=sd)
+You may check that the results actually consider all matching pairs by disabling all optimization hints (i.e. the -1 and 1 return values) altoghether, and compare **each** element in first array with **each** element in the second:
+```julia
+function sd(v1, v2, i1, i2, threshold)
+    d = abs(v1[i1] - v2[i2]) / threshold
+	(d < 1)  &&  (return 0)
+	return 999 # missed match
+end
+j = sortmerge(a1, a2, 10. / nn, sorted=true, sd=sd)
+```
+but be prepared that the execution time will be really long!
+
+
+Another possible approach is to sort the numbers by their distance from the origin, i.e. 
+```julia
+lt(v, i, j) = (abs2(v[i]) < abs2(v[j]))
+function sd(v1, v2, i1, i2, threshold)
+    d = (abs(v1[i1]) - abs(v2[i2])) / threshold
+	(abs(d) >= 1)  &&  (return sign(d))
+    d = abs(v1[i1] - v2[i2]) / threshold
+	(d < 1)  &&  (return 0)
+	return 999 # missed match
+end
+j = sortmerge(a1, a2, 10. / nn, lt1=lt, lt2=lt, sd=sd)
+```
+but the performance worsen since `abs` is slower than `real`.
+
+
+### Match arrays of geographical coordinates
+
+The following example shows how to match 2D arrays containing geographical coordinates (latitude and longitude).  We will use the `gcirc` function in the [Astrolib](https://github.com/JuliaAstro/AstroLib.jl) package to calculate the great circle arc distances between two points:
+
+``` julia
+nn = 1_000_000
+lat1  = rand(nn) .* 180 .- 90.;
+long1 = rand(nn) .*360;
+lat2  = rand(nn) .* 180 .- 90.;
+long2 = rand(nn) .* 360;
+
+using AstroLib
+lt(v, i, j) = (v[i, 2] < v[j, 2])
+function sd(v1, v2, i1, i2, threshold_arcsec)
+    threshold_deg = threshold_arcsec / 3600. # [deg]
+    d = (v1[i1, 2] - v2[i2, 2]) / threshold_deg
+    (abs(d) >= 1)  &&  (return sign(d))
+    dd = gcirc(2, v1[i1, 1], v1[i1, 2], v2[i2, 1], v2[i2, 2])
+    (dd < threshold_arcsec)  &&  (return 0)
+    return 999
+end
+j = sortmerge([lat1 long1], [lat2 long2], lt1=lt, lt2=lt, sd=sd, 1.) 
+```
+
+Again, by pre-sorting the arrays we obtain significant performance improvements:
+``` julia
+lat1  = lat1[ sortperm(j[1])];
+long1 = long1[sortperm(j[1])];
+lat2  = lat2[ sortperm(j[2])];
+long2 = long2[sortperm(j[2])];
+j = sortmerge([lat1 long1], [lat2 long2], sorted=true, sd=sd, 1.) 
 ```
