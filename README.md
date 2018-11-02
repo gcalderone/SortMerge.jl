@@ -10,7 +10,7 @@ The algorithm works out of the box with arrays of numbers, but it can also be us
 
 
 ## Installation
-```
+```julia
 Pkg.add("SortMerge")
 ```
 
@@ -74,14 +74,14 @@ The number of times each element in the first array has been matched can be retr
 cm = countmap(j[1])
 for i in 1:length(array1)
     println("Element at index $i ($(array1[i])) has been matched $(cm[i]) times")
-end	
+end
 ```
 Analogously, for the second array:
 ``` julia
 cm = countmap(j[2])
 for i in 1:length(array2)
     println("Element at index $i ($(array2[i])) has been matched $(cm[i]) times")
-end	
+end
 ```
 
 A more computationally demanding example is as follows:
@@ -96,10 +96,10 @@ where the purpose of the last line is just to perform a simple check on the matc
 
 The default `show` method for the tuple returned by `sortmerge` report a few details of the matching process and may help in improving the performances. E.g., for the previous example:
 ```
-Input A:     631879 /    1000000  ( 63.19%) - max mult. 8
-Input B:     631306 /    1000000  ( 63.13%) - max mult. 9
-Missed :          0 /    2998894  (  0.00%) -   Output  998896
-Elapsed: 0.94 s  (sort: 0.668, match: 0.202, overhead: 0.0703)
+Input A:     630138 /    1000000  ( 63.01%) - max mult. 8
+Input B:     630933 /    1000000  ( 63.09%) - max mult. 8
+Missed :          0 /    2996535  (  0.00%) - Output  996536
+Elapsed: 0.81 s  (sort: 0.421, match: 0.308, overhead: 0.0822)
 ```
 The lines marked with `Input A` and `Input B` report:
 - the number of indices for which a matching pair has been found;
@@ -132,6 +132,8 @@ j = sortmerge(sorted1, sorted2, sorted=true)
 
 As anticipated, the **SortMerge** package can handle any data type stored in any type of container, as well as customized sorting and matching criteria, by providing customized functions for sorting and matching elements.
 
+The following sections will provide a few examples.
+
 ### Custom sorting function
 
 The custom sorting functions must accept three arguments:
@@ -161,8 +163,6 @@ The **-1** and **1** return values are very important *hints* which allow `sortm
 
 The `sortmerge` accept this function through the `sd` (*Sign of the Difference*) keyword.  The name stem from the fact that for array of numbers this function should simply return the sign of the difference of two numbers.
 
-The following sections will provide a few examples.
-
 
 ### Use with [data frames](https://github.com/JuliaData/DataFrames.jl)
 
@@ -171,14 +171,14 @@ The following example shows how to match two data frames objects, according to t
 using DataFrames
 
 # Create a data frame with prime numbers
-primes = DataFrame(:p => [1, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 
+primes = DataFrame(:p => [1, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37,
                           41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97])
 
 # ...and another one with random numbers.
 nn = 100
 numbers = DataFrame(:n => rand(1:100, nn))
 
-# Search for matching elements in the two dataframes, and print the 
+# Search for matching elements in the two dataframes, and print the
 # multiplicity of matching prime numbers
 j = sortmerge(numbers, primes,
              lt1=(v, i, j) -> (v[i,:n] < v[j,:n]),
@@ -188,7 +188,7 @@ j = sortmerge(numbers, primes,
 cm = countmap(j[2]);
 for i in 1:nrow(primes)
     println("Prime number $(primes[i,:p]) has been matched $(cm[i]) times")
-end	
+end
 ```
 Here we defined two custom `lt1` and `lt2` functions to sort the `numbers` and `prime` vector respectively, and a custom `sd` function which uses the appropriate column names (`:n` and `:p`) for comparison.
 
@@ -227,7 +227,7 @@ j = sortmerge(a1, a2, 10. / nn, sorted=true, sd=sd)
 but be prepared that the execution time will be really long!
 
 
-Another possible approach is to sort the numbers by their distance from the origin, i.e. 
+Another possible approach is to sort the numbers by their distance from the origin, i.e.
 ```julia
 lt(v, i, j) = (abs2(v[i]) < abs2(v[j]))
 function sd(v1, v2, i1, i2, threshold)
@@ -263,7 +263,7 @@ function sd(v1, v2, i1, i2, threshold_arcsec)
     (dd < threshold_arcsec)  &&  (return 0)
     return 999
 end
-j = sortmerge([lat1 long1], [lat2 long2], lt1=lt, lt2=lt, sd=sd, 1.) 
+j = sortmerge([lat1 long1], [lat2 long2], lt1=lt, lt2=lt, sd=sd, 1.)
 ```
 
 Again, by pre-sorting the arrays we obtain significant performance improvements:
@@ -272,5 +272,5 @@ lat1  = lat1[ sortperm(j[1])];
 long1 = long1[sortperm(j[1])];
 lat2  = lat2[ sortperm(j[2])];
 long2 = long2[sortperm(j[2])];
-j = sortmerge([lat1 long1], [lat2 long2], sorted=true, sd=sd, 1.) 
+j = sortmerge([lat1 long1], [lat2 long2], sorted=true, sd=sd, 1.)
 ```
