@@ -39,7 +39,7 @@ for i in k2; @test length(findall(a2[i] .== a1)) == 0; end
 
 sort!(a1)
 sort!(a2)
-(j1, j2) = sortmerge(a1, a2, skipsort=true)
+(j1, j2) = sortmerge(a1, a2, sorted=true)
 @test sum(abs.(a1[j1] .- a2[j2])) == 0
 cm = countmap(j1); for i in 1:length(cm); @test cm[i] == length(findall(a1[i] .== a2)); end
 cm = countmap(j2); for i in 1:length(cm); @test cm[i] == length(findall(a2[i] .== a1)); end
