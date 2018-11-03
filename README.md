@@ -4,9 +4,9 @@
 
 ## A Julia implementation of the Sort-merge algorithm.
 
-The [Sort-merge join](https://en.wikipedia.org/wiki/Sort-merge_join) algorithm allows to **quickly** find the matching pairs in two separate arrays or collections.  The best performances are obtained when the input data are already ordered, but the algorithm is able to sort the data if they are not.
+The [Sort-merge join](https://en.wikipedia.org/wiki/Sort-merge_join) algorithm allows to **quickly** find the matching pairs in two separate arrays or collections.  The best performances are obtained when the input data are already sorted, but the package is able to sort the data if they are not.
 
-The algorithm works out of the box with arrays of numbers, but it can also be used with any data type stored in any type of container.  Also, it can handle customized sorting and matching criteria.
+The algorithm works out of the box with arrays of real numbers, but it can also be used with any data type stored in any type of container.  Also, it can handle customized sorting and matching criteria.
 
 
 ## Installation
@@ -18,20 +18,20 @@ Pkg.add("SortMerge")
 
 Consider the following vectors:
 ``` julia
-array1 = [2,3,2,5,7,2,9,9,10,12]
-array2 = [2,1,7,7,4,6,10,11]
+A = [2,3,2,5,7,2,9,9,10,12]
+B = [2,1,7,7,4,6,10,11]
 ```
 The common elements can be found as follows:
 ``` julia
 using SortMerge
-j = sortmerge(array1, array2)
+j = sortmerge(A, B)
 ```
 The `sortmerge` function returns a tuple with two structures of type `SortMerge.Results`, containing the indices of the matching pairs.   The `AbstractArray` interface is implemented for this type hence it can be used as a simple vector.  For instance, the result of the join can be printed as follows:
 ``` julia
 println("Indices of matched pairs:")
 display([j[1] j[2]])
 println("Matched pairs:")
-display([array1[j[1]] array2[j[2]]])
+display([A[j[1]] B[j[2]]])
 ```
 or, equivalently
 ```julia
@@ -41,7 +41,7 @@ for i in zip(j...)
 end
 println("Matched pairs:")
 for i in zip(j...)
-    println(array1[i[1]], "  ", array2[i[2]])
+    println(A[i[1]], "  ", B[i[2]])
 end
 ```
 To obtain the plain `Vector{Int}` objects use the `indices` function:
@@ -65,36 +65,36 @@ end
 Finally, the indices of the unmatched entries (multiplicity = 0) can be retrieved as follows:
 ``` julia
 println("Unmatched entries in array 1:")
-println(array1[indices(j[1], 0)])
+println(A[indices(j[1], 0)])
 println("Unmatched entries in array 2:")
-println(array2[indices(j[2], 0)])
+println(B[indices(j[2], 0)])
 ```
 The number of times each element in the first array has been matched can be retrieved using the `countmap` function, returning a `Vector{Int}` whose length is the same as the input array and whose elements are the multiplicity of the matched entries:
 ``` julia
 cm = countmap(j[1])
-for i in 1:length(array1)
-    println("Element at index $i ($(array1[i])) has been matched $(cm[i]) times")
+for i in 1:length(A)
+    println("Element at index $i ($(A[i])) has been matched $(cm[i]) times")
 end
 ```
 Analogously, for the second array:
 ``` julia
 cm = countmap(j[2])
-for i in 1:length(array2)
-    println("Element at index $i ($(array2[i])) has been matched $(cm[i]) times")
+for i in 1:length(B)
+    println("Element at index $i ($(B[i])) has been matched $(cm[i]) times")
 end
 ```
 
 A more computationally demanding example is as follows:
 ``` julia
 nn = 1_000_000
-a1 = rand(1:nn, nn);
-a2 = rand(1:nn, nn);
-j = sortmerge(a1, a2)
-println("Check matching: ", sum(abs.(a1[j[1]] .- a2[j[2]])) == 0)
+A = rand(1:nn, nn);
+B = rand(1:nn, nn);
+j = sortmerge(A, B)
+println("Check matching: ", sum(abs.(A[j[1]] .- B[j[2]])) == 0)
 ```
-where the purpose of the last line is just to perform a simple check on the matched pairs.  The `verbose=true` keyword is used to print a progress status.
+where the purpose of the last line is just to perform a simple check on the matched pairs.
 
-The default `show` method for the tuple returned by `sortmerge` report a few details of the matching process and may help in improving the performances. E.g., for the previous example:
+The default `show` method for the tuple returned by `sortmerge` reports a few details of the matching process and may help in finding performance bottlenecks. E.g., for the previous example:
 ```
 Input A:     630138 /    1000000  ( 63.01%) - max mult. 8
 Input B:     630933 /    1000000  ( 63.09%) - max mult. 8
@@ -107,7 +107,7 @@ The lines marked with `Input A` and `Input B` report:
 - the fraction of indices for which a matching pair has been found;
 - the maximum multiplicity;
 
-The line marked with `Output` reports:
+The next line reports:
 - the number of *missed match* (see below).  The smaller this number, the better the performances;
 - the number of times two entries have been checked for a possible match.  This number is typically much smaller than the total number of possible pairs in the input arrays (10^12 in the previous example).  This is why the algorithm provides very good performances;
 - the fraction of *missed match*;
@@ -115,14 +115,26 @@ The line marked with `Output` reports:
 
 The last line reports the total elapsed time, and the amount of time spent while sorting the input arrays, searching for mathing pairs, and for the algorithm overhead.
 
-Typically most of the time is spent sorting the input arrays, hence the algorithm will provide much better performances if the arrays are already sorted.  Since the order is so important, and it is calculated during a call to `sortmerge`, it will not be thrown away but returned in the result.  Hence if we are going to call again `sortmerge` we can take advantage of the previous calculation and rearrange the input arrays in sorted order:
+Typically most of the time is spent sorting the input arrays, hence the algorithm will provide much better performances if the arrays are already sorted.  Since the order is so important, and it is calculated during a call to `sortmerge`, it will not be thrown away but returned in the result.  Hence if we are going to call again `sortmerge` we can take advantage of the previous calculation to speed up calculations:
 ``` julia
-sorted1 = a1[sortperm(j[1])];
-sorted2 = a2[sortperm(j[2])];
+j = sortmerge(j, A, B)
 ```
-Compare the elapsed time in the previous example with the following:
+The permutation vector that puts `A` and `B` in sorted order can be retrieved with the `sortperm` function, e.g.:
 ``` julia
-j = sortmerge(sorted1, sorted2, sorted=true)
+A[sortperm(j[1])]
+B[sortperm(j[2])]
+```
+Also, a custom permutation vector can be provided via the `sort1` and `sort2` keywords.  Actually, the following calls are equivalent:
+``` julia
+j = sortmerge(j, A, B)
+# and
+j = sortmerge(A, B, sort1=sortperm(j[1]), sort2=sortperm(j[2]))
+```
+Finally, you will get an extra boost performance (at the expense of memory allocation) if the input arrays are already sorted, i.e.
+``` julia
+sortedA = A[sortperm(j[1])]
+sortedB = B[sortperm(j[2])]
+j = sortmerge(sortedA, sortedB, sorted=true)
 ```
 (the `sorted=true` keyword tells `sortmerge` that input arrays are already sorted).
 
@@ -141,7 +153,7 @@ The custom sorting functions must accept three arguments:
 - the index of the first element to be compared;
 - the index of the second element to be compared;
 
-and must return a boolean value: `true` if the first element is smaller than the second, `false` otherwise.  The `sortmerge` accepts these functions through the `lt1`, `lt2` keywords, to sort the first and second array respectively.
+and must return a boolean value: `true` if the first element is smaller than the second, `false` otherwise.  The `sortmerge` accepts these functions through the `lt1`, `lt2` keywords, to sort the first and second container respectively.
 
 ### Custom matching function
 
@@ -159,7 +171,7 @@ The return value must be an integer with the following meaning:
 - **1**: the element in the first container do not match with the element in the second container, and will not match with any of the previous elements in the second container;
 - any other integer number: none of the above applies (*missed match* case).
 
-The **-1** and **1** return values are very important *hints* which allow `sortmerge` to  avoid checking for a match that will never occur, ultimately resulting in very short execution times.  The *missed match* case (any integer number different from -1, 0 and 1) allows to deal with partial order relations and complex matching criteria.
+The **-1** and **1** return values are important *hints* which allows `sortmerge` to  avoid checking for a match that will never occur, ultimately resulting in very short execution times.  The *missed match* case (any integer number different from -1, 0 and 1) allows to deal with partial order relations and complex matching criteria.
 
 The `sortmerge` accept this function through the `sd` (*Sign of the Difference*) keyword.  The name stem from the fact that for array of numbers this function should simply return the sign of the difference of two numbers.
 
@@ -264,13 +276,4 @@ function sd(v1, v2, i1, i2, threshold_arcsec)
     return 999
 end
 j = sortmerge([lat1 long1], [lat2 long2], lt1=lt, lt2=lt, sd=sd, 1.)
-```
-
-Again, by pre-sorting the arrays we obtain significant performance improvements:
-``` julia
-lat1  = lat1[ sortperm(j[1])];
-long1 = long1[sortperm(j[1])];
-lat2  = lat2[ sortperm(j[2])];
-long2 = long2[sortperm(j[2])];
-j = sortmerge([lat1 long1], [lat2 long2], sorted=true, sd=sd, 1.)
 ```

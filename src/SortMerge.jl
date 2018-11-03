@@ -14,7 +14,7 @@ export sortmerge, sortperm, indices, countmap
 
 struct Result <: AbstractArray{Int, 1}
     size::Int
-    sort::Vector{Int}
+    sortperm::Vector{Int}
     match::Vector{Int}
     countmap::Vector{Int}
     calls_sd::Int
@@ -34,7 +34,7 @@ IndexStyle(Result::Type) = IndexLinear()
 
 function show(stream::IO, j::Result)
     u1 = length(unique(j.match))
-    @printf("Input A: %10d / %10d  (%6.2f%%) - max mult. %d\n", u1, j.size, 100. * u1/float(j.size), maximum(j[1].countmap))
+    @printf("Input  : %10d / %10d  (%6.2f%%) - max mult. %d\n", u1, j.size, 100. * u1/float(j.size), maximum(j[1].countmap))
 end
 
 function show(stream::IO, j::NTuple{2,Result})
@@ -49,23 +49,41 @@ function show(stream::IO, j::NTuple{2,Result})
             j[1].elapsed - (j[1].elapsed_sorting + j[1].elapsed_matching))
 end
 
-function sortmerge(vec1, vec2, args...;
-                  lt1=(v, i, j) -> (v[i] < v[j]),
-                  lt2=(v, i, j) -> (v[i] < v[j]),
-                  sd=(v1, v2, i1, i2) -> (sign(v1[i1] - v2[i2])),
-                  sorted=false, quiet=false)
+function default_lt(v, i, j)
+    return v[i] < v[j]
+end
+function default_sd(A, B, i, j)
+    return sign(A[i] - B[j])
+end
+
+function sortmerge(j::NTuple{2, Result},
+                   A, B, args...;
+                   sd=default_sd,
+                   quiet=false)
+    return sortmerge(A, B, args..., sort1=j[1].sortperm, sort2=j[2].sortperm, sd=sd, quiet=quiet)
+end
+function sortmerge(A, B, args...;
+                   sd=default_sd,
+                   quiet=false,
+                   sort1=Vector{Int}(),
+                   sort2=Vector{Int}(),
+                   lt1=default_lt,
+                   lt2=default_lt,
+                   sorted=false)
 
     elapsed = (Base.time_ns)()
-    size1 = size(vec1)[1]
-    size2 = size(vec2)[1]
+    size1 = size(A)[1]
+    size2 = size(B)[1]
     calls_sd  = 0
 
-    sort1 = Int.(collect(range(1, stop=size1, length=size1)))
-    sort2 = Int.(collect(range(1, stop=size2, length=size2)))
     elapsed_sorting = (Base.time_ns)()
-    if !sorted
-        sort1 = sortperm(sort1, lt=(i, j) -> (lt1(vec1, i, j)))
-        sort2 = sortperm(sort2, lt=(i, j) -> (lt2(vec2, i, j)))
+    if length(sort1) == 0
+        sort1 = collect(range(1, length=size1))
+        (sorted)  ||  (sort1 = sortperm(sort1, lt=(i, j) -> (lt1(A, i, j))))
+    end
+    if length(sort2) == 0
+        sort2 = collect(range(1, length=size2))
+        (sorted)  ||  (sort2 = sortperm(sort2, lt=(i, j) -> (lt2(B, i, j))))
     end
     elapsed_sorting = ((Base.time_ns)() - elapsed_sorting) / 1.e9
 
@@ -81,7 +99,7 @@ function sortmerge(vec1, vec2, args...;
     progress = false
     for i1 in 1:size1
         for i2 in i2a:size2
-            if !quiet  &&  (((Base.time_ns)() - elapsed) / 1.e9 > 1)
+            if !progress  &&  !quiet  &&  (((Base.time_ns)() - elapsed) / 1.e9 > 1)
                 progress = true
             end
             if progress
@@ -95,9 +113,9 @@ function sortmerge(vec1, vec2, args...;
             j1 = sort1[i1]
             j2 = sort2[i2]
             if length(args) > 0  # This improves performances
-                dd = Int(sd(vec1, vec2, j1, j2, args...))
+                dd = Int(sd(A, B, j1, j2, args...))
             else
-                dd = Int(sd(vec1, vec2, j1, j2))
+                dd = Int(sd(A, B, j1, j2))
             end
             calls_sd += 1
 
@@ -126,7 +144,7 @@ end
 
 
 countmap(res::Result) = res.countmap
-sortperm(res::Result) = res.sort
+sortperm(res::Result) = res.sortperm
 
 function indices(res::Result, multiplicity::Int=1)
     @assert multiplicity >= 0
