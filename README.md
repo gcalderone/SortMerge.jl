@@ -96,24 +96,20 @@ where the purpose of the last line is just to perform a simple check on the matc
 
 The default `show` method for the tuple returned by `sortmerge` reports a few details of the matching process and may help in finding performance bottlenecks. E.g., for the previous example:
 ```
-Input A:     630138 /    1000000  ( 63.01%) - max mult. 8
-Input B:     630933 /    1000000  ( 63.09%) - max mult. 8
-Missed :          0 /    2996535  (  0.00%) - Output  996536
-Elapsed: 0.81 s  (sort: 0.421, match: 0.308, overhead: 0.0822)
+Input A:     631694 /    1000000  ( 63.17%) - max mult. 9 | sort : 0.251s
+Input B:     631479 /    1000000  ( 63.15%) - max mult. 9 | sort : 0.251s
+Output :     999161.                                      | total: 0.878s
 ```
 The lines marked with `Input A` and `Input B` report:
 - the number of indices for which a matching pair has been found;
 - the total number of elements in input array;
 - the fraction of indices for which a matching pair has been found;
 - the maximum multiplicity;
+- the time spent sorting the array (in seconds).
 
-The next line reports:
-- the number of *missed match* (see below).  The smaller this number, the better the performances;
-- the number of times two entries have been checked for a possible match.  This number is typically much smaller than the total number of possible pairs in the input arrays (10^12 in the previous example).  This is why the algorithm provides very good performances;
-- the fraction of *missed match*;
-- the number of matched pairs in the output.
-
-The last line reports the total elapsed time, and the amount of time spent while sorting the input arrays, searching for mathing pairs, and for the algorithm overhead.
+The last line reports:
+- the number of matched pairs in the output;
+- the total elapsed time (in seconds).
 
 Typically most of the time is spent sorting the input arrays, hence the algorithm will provide much better performances if the arrays are already sorted.  Since the order is so important, and it is calculated during a call to `sortmerge`, it will not be thrown away but returned in the result.  Hence if we are going to call again `sortmerge` we can take advantage of the previous calculation to speed up calculations:
 ``` julia
@@ -121,8 +117,8 @@ j = sortmerge(j, A, B)
 ```
 The permutation vector that puts `A` and `B` in sorted order can be retrieved with the `sortperm` function, e.g.:
 ``` julia
-A[sortperm(j[1])]
-B[sortperm(j[2])]
+A[sortperm(j[1])];
+B[sortperm(j[2])];
 ```
 Also, a custom permutation vector can be provided via the `sort1` and `sort2` keywords.  Actually, the following calls are equivalent:
 ``` julia
@@ -176,6 +172,7 @@ The **-1** and **1** return values are important *hints* which allows `sortmerge
 The `sortmerge` accept this function through the `sd` (*Sign of the Difference*) keyword.  The name stem from the fact that for array of numbers this function should simply return the sign of the difference of two numbers.
 
 
+
 ### Use with [data frames](https://github.com/JuliaData/DataFrames.jl)
 
 The following example shows how to match two data frames objects, according to the numbers in a specific column:
@@ -202,7 +199,7 @@ for i in 1:nrow(primes)
     println("Prime number $(primes[i,:p]) has been matched $(cm[i]) times")
 end
 ```
-Here we defined two custom `lt1` and `lt2` functions to sort the `numbers` and `prime` vector respectively, and a custom `sd` function which uses the appropriate column names (`:n` and `:p`) for comparison.
+Here we defined two custom `lt1` and `lt2` functions to sort the `numbers` and `prime` DataFrame respectively, and a custom `sd` function which uses the appropriate column names (`:n` and `:p`) for comparisons.
 
 
 ### Match arrays of complex numbers
@@ -225,7 +222,7 @@ function sd(v1, v2, i1, i2, threshold)
 end
 j = sortmerge(a1, a2, 10. / nn, lt1=lt, lt2=lt, sd=sd)
 ```
-Note that since the order relation is partial the `sd` function will sometime return a number different from -1, 0 and 1, resulting in the so called *missed match* condition (return value is 999).   In this example ~90% of `sd` calls result in a *missed match*, hence the worsen performance with respect to the previous example with real numbers.
+Note that since the order relation is partial the `sd` function will sometimes return a number different from -1, 0 and 1, resulting in the so called *missed match* condition (return value is 999).
 
 You may check that the results actually consider all matching pairs by disabling all optimization hints (i.e. the -1 and 1 return values) altoghether, and compare **each** element in first array with **each** element in the second:
 ```julia
@@ -237,7 +234,6 @@ end
 j = sortmerge(a1, a2, 10. / nn, sorted=true, sd=sd)
 ```
 but be prepared that the execution time will be really long!
-
 
 Another possible approach is to sort the numbers by their distance from the origin, i.e.
 ```julia
