@@ -10,6 +10,8 @@ import Base.sortperm
 import Base.iterate, Base.length, Base.size, Base.getindex,
        Base.firstindex, Base.lastindex, Base.IndexStyle
 
+import StatsBase.countmap
+
 export sortmerge, sortperm, indices, countmap
 
 struct Result <: AbstractArray{Int, 1}
