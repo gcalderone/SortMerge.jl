@@ -6,44 +6,74 @@ using Printf
 
 import Base.show
 import Base.sortperm
+import Base.zip
 
 import Base.iterate, Base.length, Base.size, Base.getindex,
        Base.firstindex, Base.lastindex, Base.IndexStyle
 
-import StatsBase.countmap
+export sortmerge, sortperm, nmatch, multimatch
 
-export sortmerge, sortperm, indices, countmap
-
-struct Result <: AbstractArray{Int, 1}
+# --------------------------------------------------------------------
+# Index structure
+#
+struct Source # <: AbstractVector{Int}
     size::Int
     sortperm::Vector{Int}
-    match::Vector{Int}
-    countmap::Vector{Int}
-    elapsed::Float64
-    elapsed_sorting::Float64
+    nmatch::Vector{Int}
 end
 
-iterate(jj::Result, state=1) = state > length(jj.match) ? nothing : (jj.match[state], state+1)
-length(jj::Result) = length(jj.match)
-size(jj::Result) = (length(jj.match),)
-getindex(jj::Result, i)	= jj.match[i]
-firstindex(jj::Result) = 1
-lastindex(jj::Result) = length(jj.match)
-IndexStyle(Result::Type) = IndexLinear()
 
-function show(stream::IO, j::Result)
-    u1 = length(unique(j.match))
-    @printf("Input  : %10d / %10d  (%6.2f%%) - max mult. %d\n", u1, j.size, 100. * u1/float(j.size), maximum(j[1].countmap))
+# --------------------------------------------------------------------
+# Matched structure
+#
+struct Matched <: AbstractMatrix{Int}
+    sources::Vector{Source}
+    matched::Matrix{Int}
 end
 
-function show(stream::IO, j::NTuple{2,Result})
-    @assert length(j[1].match) == length(j[2].match)
-    u1 = length(unique(j[1].match))
-    u2 = length(unique(j[2].match))
-    @printf("Input A: %10d / %10d  (%6.2f%%) - max mult. %d | sort : %.3gs\n", u1, j[1].size, 100. * u1/float(j[1].size), maximum(j[1].countmap), j[1].elapsed_sorting)
-    @printf("Input B: %10d / %10d  (%6.2f%%) - max mult. %d | sort : %.3gs\n", u2, j[2].size, 100. * u2/float(j[2].size), maximum(j[2].countmap), j[1].elapsed_sorting)
-    @printf("Output : %10d.                                      | total: %.3gs\n", length(j[1].match), j[1].elapsed)
+# Methods
+iterate(mm::Matched, state=1) = iterate(mm.matched, state)
+length(mm::Matched) = length(mm.matched)
+size(mm::Matched) = size(mm.matched)
+getindex(mm::Matched, inds...) = getindex(mm.matched, inds...)
+firstindex(mm::Matched) = firstindex(mm.matched)
+lastindex(mm::Matched) = lastindex(mm.matched)
+
+nmatch(  mm::Matched, outsource::Int) = mm.sources[outsource].nmatch
+sortperm(mm::Matched, outsource::Int) = mm.sources[outsource].sortperm
+
+zip(  mm::Matched) = zip(map(i -> mm.matched[:,i], 1:length(mm.sources))...)
+#unzip(mm::Matched)  = ntuple(i -> mm.matched[:,i],  length(mm.sources))
+
+
+function multimatch(mm::Matched, source::Int, multi::Int; zip=false, group=false)
+    @assert multi >= 1
+    index = findall(nmatch(mm, source) .== multi)
+    index_out = sortmerge(index, mm.matched[:, source], quiet=true)[:,2]
+    ret = mm[index_out,:]
+
+    if !group
+        if zip
+            return collect(Base.zip(map(i -> ret[:,i], 1:length(mm.sources))...))
+        end
+        return ret
+    end
+
+    if zip
+        out = Vector{Vector{NTuple{length(mm.sources), Int}}}()
+        for uu in index
+            push!(out, collect(Base.zip(map(i -> ret[findall(ret[:,source] .== uu), i], 1:length(mm.sources))...)))
+        end
+        return out
+    end
+
+    out = Vector{Matrix{Int}}()
+    for uu in index
+        push!(out, ret[findall(ret[:,source] .== uu), :])
+    end
+    return out
 end
+
 
 function default_lt(v, i, j)
     return v[i] < v[j]
@@ -52,12 +82,8 @@ function default_sd(A, B, i, j)
     return sign(A[i] - B[j])
 end
 
-function sortmerge(j::NTuple{2, Result},
-                   A, B, args...;
-                   sd=default_sd,
-                   quiet=false)
-    return sortmerge(A, B, args..., sort1=j[1].sortperm, sort2=j[2].sortperm, sd=sd, quiet=quiet)
-end
+# sortmerge(j::NTuple{2, Matched}, A, B, args...; sd=default_sd, quiet=false) = 
+# sortmerge(A, B, args..., sort1=j[1].sortperm, sort2=j[2].sortperm, sd=sd, quiet=quiet)
 function sortmerge(A, B, args...;
                    sd=default_sd,
                    quiet=false,
@@ -71,18 +97,19 @@ function sortmerge(A, B, args...;
     size1 = size(A)[1]
     size2 = size(B)[1]
 
-    elapsed_sorting1 = (Base.time_ns)()
+    elapsed_sorting = fill(0., 2)
+    elapsed_sorting[1] = (Base.time_ns)()
     if length(sort1) == 0
         sort1 = collect(range(1, length=size1))
         (sorted)  ||  (sort1 = sortperm(sort1, lt=(i, j) -> (lt1(A, i, j))))
     end
-    elapsed_sorting1 = ((Base.time_ns)() - elapsed_sorting1) / 1.e9
-    elapsed_sorting2 = (Base.time_ns)()
+    elapsed_sorting[1] = ((Base.time_ns)() - elapsed_sorting[1]) / 1.e9
+    elapsed_sorting[2] = (Base.time_ns)()
     if length(sort2) == 0
         sort2 = collect(range(1, length=size2))
         (sorted)  ||  (sort2 = sortperm(sort2, lt=(i, j) -> (lt2(B, i, j))))
     end
-    elapsed_sorting2 = ((Base.time_ns)() - elapsed_sorting2) / 1.e9
+    elapsed_sorting[2] = ((Base.time_ns)() - elapsed_sorting[2]) / 1.e9
 
     i2a = 1
     match1 = Array{Int}(undef, 0)
@@ -94,10 +121,10 @@ function sortmerge(A, B, args...;
     progress = false
     for i1 in 1:size1
         for i2 in i2a:size2
-            if !progress  &&  !quiet  &&  (((Base.time_ns)() - elapsed) / 1.e9 > 1)
+            if !quiet  &&  !progress  &&  (((Base.time_ns)() - elapsed) / 1.e9 > 1)
                 progress = true
             end
-            if progress
+            if !quiet  &&  progress
                 completed = ceil(1000. * ((i1-1) * size2 + i2) / (size1 * size2))
                 if completed > lastlog
                     @printf("Completed: %5.1f%%, matched: %d \r", completed/10., length(match1))
@@ -123,38 +150,26 @@ function sortmerge(A, B, args...;
             end
         end
     end
-    if progress
+    if !quiet  &&  progress
         @printf("Completed: %5.1f%%, matched: %d \n", 100., length(match1))
     end
 
+    side1 = Source(size1, sort1, cm1)
+    side2 = Source(size2, sort2, cm2)
+    mm = Matched([side1, side2], [match1 match2])
     elapsed = ((Base.time_ns)() - elapsed) / 1.e9
-    ret1 = Result(size1, sort1, match1, cm1, elapsed, elapsed_sorting1)
-    ret2 = Result(size2, sort2, match2, cm2, elapsed, elapsed_sorting2)
-    return (ret1, ret2)
-end
 
-
-countmap(res::Result) = res.countmap
-sortperm(res::Result) = res.sortperm
-
-function indices(res::Result, multiplicity::Int=1)
-    @assert multiplicity >= 0
-    (multiplicity == 1)  &&  (return res.match)
-    return findall(res.countmap .== multiplicity)
-end
-
-indices(res::NTuple{2, Result}, multiplicity::Int=1; right=false) = indices(res..., multiplicity, right=right)
-function indices(res1::Result, res2::Result, multiplicity::Int=1; right=false)
-    @assert multiplicity >= 1
-    (multiplicity == 1)  &&  (return (res1.match, res2.match))
-    if right
-        ii = findall(res2.countmap .== multiplicity)
-        (q1, q2) = sortmerge(ii, res2.match)
-        return (res1.match[q2.match], ii[q1.match])
+    if !quiet
+        for i in 1:length(mm.sources)
+            ss = mm.sources[i]
+            uu = length(unique(mm.matched[:,i]))
+            @printf("Input %2d: %10d / %10d  (%6.2f%%)  -  max mult. %d | sort : %.3gs\n",
+                    i, uu, ss.size, 100. * uu/float(ss.size), maximum(ss.nmatch), elapsed_sorting[i])
+        end
+        @printf("Output  : %10d                                         | total: %.3gs\n",
+                size(mm.matched)[1], elapsed)
     end
-    ii = findall(res1.countmap .== multiplicity)
-    (q1, q2) = sortmerge(ii, res1.match)
-    return (ii[q1.match], res2.match[q2.match])
+    return mm
 end
 
 end # module

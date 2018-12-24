@@ -26,81 +26,66 @@ The common elements can be found as follows:
 using SortMerge
 j = sortmerge(A, B)
 ```
-The `sortmerge` function returns a tuple with two structures of type `SortMerge.Results`, containing the indices of the matching pairs.   The `AbstractArray` interface is implemented for this type hence it can be used as a simple vector.  For instance, the result of the join can be printed as follows:
+The value returned by the `sortmerge` function implements the `AbstractArray` interface, hence it can be used as a common `Matrix{Int}` containing the indices of the matching pairs, e.g:
 ``` julia
 println("Indices of matched pairs:")
-display([j[1] j[2]])
+display([j[:,1] j[:,2]])
 println("Matched pairs:")
-display([A[j[1]] B[j[2]]])
+display([A[j[:,1]] B[j[:,2]]])
 ```
-or, equivalently
+or, equivalently:
 ```julia
 println("Indices of matched pairs:")
-for i in zip(j...)
-    println(i[1], "  ", i[2])
+for (i1, i2) in zip(j)
+    println(i1, "  ", i2)
 end
 println("Matched pairs:")
-for i in zip(j...)
-    println(A[i[1]], "  ", B[i[2]])
+for (i1, i2) in zip(j)
+    println(A[i1], "  ", B[i2])
 end
 ```
-To obtain the plain `Vector{Int}` objects use the `indices` function:
+
+The number of times each element in the input array has been matched can be retrieved using the `nmatch` function, returning a `Vector{Int}` whose length is the same as the input array and whose elements are the multiplicity of the matched entries:
 ``` julia
-for i in zip(indices(j)...)
-    println(i[1], "  ", i[2])
-end
-```
-The `indices` function (by default) returns all the indices of the matching pairs, but it can also be used to return just the indices of entries matched with a given multiplicity.  For instance, the matched pairs whose index in the first array occur twice (multiplicity = 2) can be retrieved as follows:
-``` julia
-for i in zip(indices(j, 2)...)
-    println(i[1], "  ", i[2])
-end
-```
-The matched pairs whose index in the **second** array (rather than **first**) occur three times (multiplicity = 3) is obtained as follows:
-``` julia
-for i in zip(indices(j, 3, right=true)...)
-    println(i[1], "  ", i[2])
-end
-```
-Finally, the indices of the unmatched entries (multiplicity = 0) can be retrieved as follows:
-``` julia
-println("Unmatched entries in array 1:")
-println(A[indices(j[1], 0)])
-println("Unmatched entries in array 2:")
-println(B[indices(j[2], 0)])
-```
-The number of times each element in the first array has been matched can be retrieved using the `countmap` function, returning a `Vector{Int}` whose length is the same as the input array and whose elements are the multiplicity of the matched entries:
-``` julia
-cm = countmap(j[1])
+cm = nmatch(j, 1)
 for i in 1:length(A)
     println("Element at index $i ($(A[i])) has been matched $(cm[i]) times")
 end
 ```
 Analogously, for the second array:
 ``` julia
-cm = countmap(j[2])
+cm = nmatch(j, 2)
 for i in 1:length(B)
     println("Element at index $i ($(B[i])) has been matched $(cm[i]) times")
 end
 ```
+
+The unmatched entries can be retrieved as follows:
+``` julia
+println("Unmatched entries in array 1:")
+println(A[nmatch(j, 1) .== 0])
+println("Unmatched entries in array 2:")
+println(B[nmatch(j, 2) .== 0])
+```
+
 
 A more computationally demanding example is as follows:
 ``` julia
 nn = 1_000_000
 A = rand(1:nn, nn);
 B = rand(1:nn, nn);
-j = sortmerge(A, B)
-println("Check matching: ", sum(abs.(A[j[1]] .- B[j[2]])) == 0)
+j = sortmerge(A, B);
+println("Check matching: ", sum(abs.(A[j[:,1]] .- B[j[:,2]])) == 0)
 ```
 where the purpose of the last line is just to perform a simple check on the matched pairs.
 
-The default `show` method for the tuple returned by `sortmerge` reports a few details of the matching process and may help in finding performance bottlenecks. E.g., for the previous example:
+Unless the `quiet=true` keyword is used, the `sortmerge` function reports a few details of the matching process which may help in finding performance bottlenecks. E.g., for the previous example:
 ```
-Input A:     631694 /    1000000  ( 63.17%) - max mult. 9 | sort : 0.251s
-Input B:     631479 /    1000000  ( 63.15%) - max mult. 9 | sort : 0.251s
-Output :     999161.                                      | total: 0.878s
+Input  1:     631666 /    1000000  ( 63.17%)  -  max mult. 8 | sort : 0.268s
+Input  2:     632056 /    1000000  ( 63.21%)  -  max mult. 8 | sort : 0.199s
+Output  :     998656                                         | total: 0.809s
 ```
-The lines marked with `Input A` and `Input B` report:
+The lines marked with `Input 1` and `Input 2` report, respectively:
 - the number of indices for which a matching pair has been found;
 - the total number of elements in input array;
 - the fraction of indices for which a matching pair has been found;
@@ -111,28 +96,44 @@ The last line reports:
 - the number of matched pairs in the output;
 - the total elapsed time (in seconds).
 
-Typically most of the time is spent sorting the input arrays, hence the algorithm will provide much better performances if the arrays are already sorted.  Since the order is so important, and it is calculated during a call to `sortmerge`, it will not be thrown away but returned in the result.  Hence if we are going to call again `sortmerge` we can take advantage of the previous calculation to speed up calculations:
+A significant amount of time is spent sorting the input arrays, hence the algorithm will provide much better performances if the arrays are already sorted.  Since the order is so important, and it is calculated during a call to `sortmerge`, it will not be thrown away but returned in the results.  Hence if we are going to call again `sortmerge` we can take advantage of the previous calculation to speed up calculations:
 ``` julia
-j = sortmerge(j, A, B)
+j = sortmerge(A, B, sort1=sortperm(j, 1), sort2=sortperm(j, 2));
 ```
-The permutation vector that puts `A` and `B` in sorted order can be retrieved with the `sortperm` function, e.g.:
+The permutation vector that puts `A` and `B` in sorted order are retrieved with the `sortperm` function, and passed through the `sort1` and `sort2` keywords.
+
+Finally, you will get an extra boost performance if the input arrays are already sorted, i.e.
 ``` julia
-A[sortperm(j[1])];
-B[sortperm(j[2])];
+sortedA = A[sortperm(j, 1)]
+sortedB = B[sortperm(j, 2)]
+j = sortmerge(sortedA, sortedB, sorted=true);
 ```
-Also, a custom permutation vector can be provided via the `sort1` and `sort2` keywords.  Actually, the following calls are equivalent:
+(the `sorted=true` keyword tells `sortmerge` that the input arrays are already sorted).
+
+
+## Handling multiple matched entries
+
+The `multimatch` function provides several facilities to deal with multiple matched entries.  For instance, the matrix containing the matched pairs whose index in the **first** array occur twice (multiplicity = 2) can be retrieved as follows:
 ``` julia
-j = sortmerge(j, A, B)
-# and
-j = sortmerge(A, B, sort1=sortperm(j[1]), sort2=sortperm(j[2]))
+m = multimatch(j, 1, 2)
+display([m[:,1] m[:,2]])
 ```
-Finally, you will get an extra boost performance (at the expense of memory allocation) if the input arrays are already sorted, i.e.
+The matched pairs whose index in the **second** array (rather than **first**) occur three times (multiplicity = 3) is obtained as follows:
 ``` julia
-sortedA = A[sortperm(j[1])]
-sortedB = B[sortperm(j[2])]
-j = sortmerge(sortedA, sortedB, sorted=true)
+for (i1, i2) in multimatch(j, 2, 3, zip=true)
+    println(i1, "  ", i2)
+end
 ```
-(the `sorted=true` keyword tells `sortmerge` that input arrays are already sorted).
+Note that we used the `zip=true` keyword: this tells `multimatch` to return an array of tuples, rather than a matrix.
+
+Another facility provided by `sortmerge` is to separate matching pairs into separate groups, e.g.:
+``` julia
+for group in multimatch(j, 1, 8, group=true)
+    println("The index ", group[1,1], " in the first table matches the following indices in the second:")
+    println(group[:,2])
+end
+```
+
 
 
 
@@ -194,7 +195,7 @@ j = sortmerge(numbers, primes,
              lt2=(v, i, j) -> (v[i,:p] < v[j,:p]),
              sd=(v1, v2, i1, i2) -> (sign(v1[i1,:n] - v2[i2,:p])))
 
-cm = countmap(j[2]);
+cm = nmatch(j, 2);
 for i in 1:nrow(primes)
     println("Prime number $(primes[i,:p]) has been matched $(cm[i]) times")
 end
@@ -220,7 +221,7 @@ function sd(v1, v2, i1, i2, threshold)
 	(d < 1)  &&  (return 0)
 	return 999 # missed match
 end
-j = sortmerge(a1, a2, 10. / nn, lt1=lt, lt2=lt, sd=sd)
+j = sortmerge(a1, a2, 10. / nn, lt1=lt, lt2=lt, sd=sd);
 ```
 Note that since the order relation is partial the `sd` function will sometimes return a number different from -1, 0 and 1, resulting in the so called *missed match* condition (return value is 999).
 
@@ -231,7 +232,7 @@ function sd(v1, v2, i1, i2, threshold)
 	(d < 1)  &&  (return 0)
 	return 999 # missed match
 end
-j = sortmerge(a1, a2, 10. / nn, sorted=true, sd=sd)
+j = sortmerge(a1, a2, 10. / nn, sorted=true, sd=sd);
 ```
 but be prepared that the execution time will be really long!
 
@@ -245,7 +246,7 @@ function sd(v1, v2, i1, i2, threshold)
 	(d < 1)  &&  (return 0)
 	return 999 # missed match
 end
-j = sortmerge(a1, a2, 10. / nn, lt1=lt, lt2=lt, sd=sd)
+j = sortmerge(a1, a2, 10. / nn, lt1=lt, lt2=lt, sd=sd);
 ```
 but the performance worsen since `abs` is slower than `real`.
 
@@ -271,5 +272,5 @@ function sd(v1, v2, i1, i2, threshold_arcsec)
     (dd < threshold_arcsec)  &&  (return 0)
     return 999
 end
-j = sortmerge([lat1 long1], [lat2 long2], lt1=lt, lt2=lt, sd=sd, 1.)
+j = sortmerge([lat1 long1], [lat2 long2], lt1=lt, lt2=lt, sd=sd, 1.);
 ```
