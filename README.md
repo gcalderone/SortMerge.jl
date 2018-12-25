@@ -29,9 +29,9 @@ j = sortmerge(A, B)
 The value returned by the `sortmerge` function implements the `AbstractArray` interface, hence it can be used as a common `Matrix{Int}` containing the indices of the matching pairs, e.g:
 ``` julia
 println("Indices of matched pairs:")
-display([j[:,1] j[:,2]])
+display([j[1] j[2]])
 println("Matched pairs:")
-display([A[j[:,1]] B[j[:,2]]])
+display([A[j[1]] B[j[2]]])
 ```
 or, equivalently:
 ```julia
@@ -47,14 +47,14 @@ end
 
 The number of times each element in the input array has been matched can be retrieved using the `nmatch` function, returning a `Vector{Int}` whose length is the same as the input array and whose elements are the multiplicity of the matched entries:
 ``` julia
-cm = nmatch(j, 1)
+cm = countmatch(j, 1)
 for i in 1:length(A)
     println("Element at index $i ($(A[i])) has been matched $(cm[i]) times")
 end
 ```
 Analogously, for the second array:
 ``` julia
-cm = nmatch(j, 2)
+cm = countmatch(j, 2)
 for i in 1:length(B)
     println("Element at index $i ($(B[i])) has been matched $(cm[i]) times")
 end
@@ -63,9 +63,9 @@ end
 The unmatched entries can be retrieved as follows:
 ``` julia
 println("Unmatched entries in array 1:")
-println(A[nmatch(j, 1) .== 0])
+println(A[countmatch(j, 1) .== 0])
 println("Unmatched entries in array 2:")
-println(B[nmatch(j, 2) .== 0])
+println(B[countmatch(j, 2) .== 0])
 ```
 
 
@@ -75,15 +75,15 @@ nn = 1_000_000
 A = rand(1:nn, nn);
 B = rand(1:nn, nn);
 j = sortmerge(A, B);
-println("Check matching: ", sum(abs.(A[j[:,1]] .- B[j[:,2]])) == 0)
+println("Check matching: ", sum(abs.(A[j[1]] .- B[j[2]])) == 0)
 ```
 where the purpose of the last line is just to perform a simple check on the matched pairs.
 
 Unless the `quiet=true` keyword is used, the `sortmerge` function reports a few details of the matching process which may help in finding performance bottlenecks. E.g., for the previous example:
 ```
-Input  1:     631666 /    1000000  ( 63.17%)  -  max mult. 8 | sort : 0.268s
-Input  2:     632056 /    1000000  ( 63.21%)  -  max mult. 8 | sort : 0.199s
-Output  :     998656                                         | total: 0.809s
+Input  1:     632798 /    1000000  ( 63.28%)  -  max mult. 9 | sort : 0.19s
+Input  2:     631539 /    1000000  ( 63.15%)  -  max mult. 8 | sort : 0.188s
+Output  :    1000414                                         | total: 0.661s
 ```
 The lines marked with `Input 1` and `Input 2` report, respectively:
 - the number of indices for which a matching pair has been found;
@@ -113,24 +113,23 @@ j = sortmerge(sortedA, sortedB, sorted=true);
 
 ## Handling multiple matched entries
 
-The `multimatch` function provides several facilities to deal with multiple matched entries.  For instance, the matrix containing the matched pairs whose index in the **first** array occur twice (multiplicity = 2) can be retrieved as follows:
+The `multimatch` function allows to extract matching pairs with a given multiplicity.  E.g., to find the matched pairs whose index in the **first** array occurs twice (multiplicity = 2):
 ``` julia
 m = multimatch(j, 1, 2)
-display([m[:,1] m[:,2]])
+display([m[1] m[2]])
 ```
 The matched pairs whose index in the **second** array (rather than **first**) occur three times (multiplicity = 3) is obtained as follows:
 ``` julia
-for (i1, i2) in multimatch(j, 2, 3, zip=true)
+for (i1, i2) in zip(multimatch(j, 2, 3))
     println(i1, "  ", i2)
 end
 ```
-Note that we used the `zip=true` keyword: this tells `multimatch` to return an array of tuples, rather than a matrix.
 
-Another facility provided by `sortmerge` is to separate matching pairs into separate groups, e.g.:
+Another facility provided by `sortmerge` is to separate matching pairs into groups, e.g.:
 ``` julia
 for group in multimatch(j, 1, 8, group=true)
-    println("The index ", group[1,1], " in the first table matches the following indices in the second:")
-    println(group[:,2])
+    println("The index ", group[1][1], " in the first table matches the following indices in the second:")
+    println(group[2])
 end
 ```
 
@@ -195,7 +194,7 @@ j = sortmerge(numbers, primes,
              lt2=(v, i, j) -> (v[i,:p] < v[j,:p]),
              sd=(v1, v2, i1, i2) -> (sign(v1[i1,:n] - v2[i2,:p])))
 
-cm = nmatch(j, 2);
+cm = countmatch(j, 2);
 for i in 1:nrow(primes)
     println("Prime number $(primes[i,:p]) has been matched $(cm[i]) times")
 end
@@ -221,7 +220,7 @@ function sd(v1, v2, i1, i2, threshold)
 	(d < 1)  &&  (return 0)
 	return 999 # missed match
 end
-j = sortmerge(a1, a2, 10. / nn, lt1=lt, lt2=lt, sd=sd);
+j = sortmerge(a1, a2, 10. / nn, lt1=lt, lt2=lt, sd=sd)
 ```
 Note that since the order relation is partial the `sd` function will sometimes return a number different from -1, 0 and 1, resulting in the so called *missed match* condition (return value is 999).
 
@@ -232,7 +231,7 @@ function sd(v1, v2, i1, i2, threshold)
 	(d < 1)  &&  (return 0)
 	return 999 # missed match
 end
-j = sortmerge(a1, a2, 10. / nn, sorted=true, sd=sd);
+j = sortmerge(a1, a2, 10. / nn, sorted=true, sd=sd)
 ```
 but be prepared that the execution time will be really long!
 
@@ -246,7 +245,7 @@ function sd(v1, v2, i1, i2, threshold)
 	(d < 1)  &&  (return 0)
 	return 999 # missed match
 end
-j = sortmerge(a1, a2, 10. / nn, lt1=lt, lt2=lt, sd=sd);
+j = sortmerge(a1, a2, 10. / nn, lt1=lt, lt2=lt, sd=sd)
 ```
 but the performance worsen since `abs` is slower than `real`.
 
@@ -272,5 +271,5 @@ function sd(v1, v2, i1, i2, threshold_arcsec)
     (dd < threshold_arcsec)  &&  (return 0)
     return 999
 end
-j = sortmerge([lat1 long1], [lat2 long2], lt1=lt, lt2=lt, sd=sd, 1.);
+j = sortmerge([lat1 long1], [lat2 long2], lt1=lt, lt2=lt, sd=sd, 1.)
 ```

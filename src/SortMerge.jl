@@ -11,67 +11,68 @@ import Base.zip
 import Base.iterate, Base.length, Base.size, Base.getindex,
        Base.firstindex, Base.lastindex, Base.IndexStyle
 
-export sortmerge, sortperm, nmatch, multimatch
+export sortmerge, sortperm, nmatch, countmatch, multimatch
 
 # --------------------------------------------------------------------
-# Index structure
+# Source structure
 #
-struct Source # <: AbstractVector{Int}
+struct Source
     size::Int
     sortperm::Vector{Int}
-    nmatch::Vector{Int}
+    cmatch::Vector{Int}
 end
 
 
 # --------------------------------------------------------------------
 # Matched structure
 #
-struct Matched <: AbstractMatrix{Int}
+struct Matched <: AbstractVector{Vector{Int}}
+    nsrc::Int
+    nrow::Int
     sources::Vector{Source}
     matched::Matrix{Int}
 end
 
 # Methods
-iterate(mm::Matched, state=1) = iterate(mm.matched, state)
-length(mm::Matched) = length(mm.matched)
-size(mm::Matched) = size(mm.matched)
-getindex(mm::Matched, inds...) = getindex(mm.matched, inds...)
-firstindex(mm::Matched) = firstindex(mm.matched)
-lastindex(mm::Matched) = lastindex(mm.matched)
+length(mm::Matched) = mm.nsrc
+size(mm::Matched) = (mm.nsrc,)
+getindex(mm::Matched, inds) = mm.matched[:, inds]
+firstindex(mm::Matched) = 1
+lastindex(mm::Matched) = mm.nsrc
+IndexStyle(::Type{Matched}) = IndexLinear()
 
-nmatch(  mm::Matched, outsource::Int) = mm.sources[outsource].nmatch
-sortperm(mm::Matched, outsource::Int) = mm.sources[outsource].sortperm
+nmatch(mm::Matched) = mm.nrow
+countmatch(mm::Matched, source::Int) = mm.sources[source].cmatch
+sortperm(  mm::Matched, source::Int) = mm.sources[source].sortperm
 
-zip(  mm::Matched) = zip(map(i -> mm.matched[:,i], 1:length(mm.sources))...)
+zip(mm::Matched) = zip(map(i -> mm.matched[:,i], 1:mm.nsrc)...)
 #unzip(mm::Matched)  = ntuple(i -> mm.matched[:,i],  length(mm.sources))
 
 
-function multimatch(mm::Matched, source::Int, multi::Int; zip=false, group=false)
+function multimatch(mm::Matched, source::Int, multi::Int; group=false)
     @assert multi >= 1
-    index = findall(nmatch(mm, source) .== multi)
-    index_out = sortmerge(index, mm.matched[:, source], quiet=true)[:,2]
-    ret = mm[index_out,:]
+    index = findall(countmatch(mm, source) .== multi)
+    index_out = sortmerge(index, mm.matched[:,source], quiet=true)[2]
+    matrix = mm.matched[index_out,:]
 
-    if !group
-        if zip
-            return collect(Base.zip(map(i -> ret[:,i], 1:length(mm.sources))...))
+    out = Vector{Matched}()
+    ngroups = (group  ?  length(index)  :  1)
+    for igroup in 1:ngroups
+        jj = (group  ?
+              findall(matrix[:,source] .== index[igroup])  :
+              collect(1:length(index_out)))
+
+        sources = Vector{Source}()
+        for i in 1:mm.nsrc
+            cm = fill(0, length(mm.sources[i].cmatch))
+            cm[mm.matched[index_out[jj], i]] .= multi
+            push!(sources, Source(mm.sources[i].size, mm.sources[i].sortperm, cm))
         end
-        return ret
+        push!(out, Matched(mm.nsrc, length(jj), sources, mm.matched[index_out[jj],:]))
     end
 
-    if zip
-        out = Vector{Vector{NTuple{length(mm.sources), Int}}}()
-        for uu in index
-            push!(out, collect(Base.zip(map(i -> ret[findall(ret[:,source] .== uu), i], 1:length(mm.sources))...)))
-        end
-        return out
-    end
-
-    out = Vector{Matrix{Int}}()
-    for uu in index
-        push!(out, ret[findall(ret[:,source] .== uu), :])
-    end
-    return out
+    (group)  &&  (return out)
+    return out[1]
 end
 
 
@@ -83,7 +84,7 @@ function default_sd(A, B, i, j)
 end
 
 # sortmerge(j::NTuple{2, Matched}, A, B, args...; sd=default_sd, quiet=false) = 
-# sortmerge(A, B, args..., sort1=j[1].sortperm, sort2=j[2].sortperm, sd=sd, quiet=quiet)
+#   sortmerge(A, B, args..., sort1=j[1].sortperm, sort2=j[2].sortperm, sd=sd, quiet=quiet)
 function sortmerge(A, B, args...;
                    sd=default_sd,
                    quiet=false,
@@ -156,7 +157,7 @@ function sortmerge(A, B, args...;
 
     side1 = Source(size1, sort1, cm1)
     side2 = Source(size2, sort2, cm2)
-    mm = Matched([side1, side2], [match1 match2])
+    mm = Matched(2, length(match1), [side1, side2], [match1 match2])
     elapsed = ((Base.time_ns)() - elapsed) / 1.e9
 
     if !quiet
@@ -164,7 +165,7 @@ function sortmerge(A, B, args...;
             ss = mm.sources[i]
             uu = length(unique(mm.matched[:,i]))
             @printf("Input %2d: %10d / %10d  (%6.2f%%)  -  max mult. %d | sort : %.3gs\n",
-                    i, uu, ss.size, 100. * uu/float(ss.size), maximum(ss.nmatch), elapsed_sorting[i])
+                    i, uu, ss.size, 100. * uu/float(ss.size), maximum(ss.cmatch), elapsed_sorting[i])
         end
         @printf("Output  : %10d                                         | total: %.3gs\n",
                 size(mm.matched)[1], elapsed)
