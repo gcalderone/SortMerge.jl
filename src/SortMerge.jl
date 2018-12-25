@@ -2,7 +2,7 @@ __precompile__(true)
 
 module SortMerge
 
-using Printf
+using Printf, SparseArrays
 
 import Base.show
 import Base.sortperm
@@ -19,7 +19,7 @@ export sortmerge, sortperm, nmatch, countmatch, multimatch
 struct Source
     size::Int
     sortperm::Vector{Int}
-    cmatch::Vector{Int}
+    cmatch::SparseVector{Int,Int}
 end
 
 
@@ -64,9 +64,9 @@ function multimatch(mm::Matched, source::Int, multi::Int; group=false)
 
         sources = Vector{Source}()
         for i in 1:mm.nsrc
-            cm = fill(0, length(mm.sources[i].cmatch))
-            cm[mm.matched[index_out[jj], i]] .= multi
-            push!(sources, Source(mm.sources[i].size, mm.sources[i].sortperm, cm))
+            push!(sources, Source(mm.sources[i].size, Vector{Int}(),
+                                  sparsevec(unique(mm.matched[index_out[jj], i]),
+                                            multi, length(mm.sources[i].cmatch))))
         end
         push!(out, Matched(mm.nsrc, length(jj), sources, mm.matched[index_out[jj],:]))
     end
@@ -155,8 +155,8 @@ function sortmerge(A, B, args...;
         @printf("Completed: %5.1f%%, matched: %d \n", 100., length(match1))
     end
 
-    side1 = Source(size1, sort1, cm1)
-    side2 = Source(size2, sort2, cm2)
+    ii = findall(cm1 .> 0); side1 = Source(size1, sort1, sparsevec(ii, cm1[ii], length(cm1)))
+    ii = findall(cm2 .> 0); side2 = Source(size2, sort2, sparsevec(ii, cm2[ii], length(cm2)))
     mm = Matched(2, length(match1), [side1, side2], [match1 match2])
     elapsed = ((Base.time_ns)() - elapsed) / 1.e9
 

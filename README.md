@@ -45,7 +45,7 @@ for (i1, i2) in zip(j)
 end
 ```
 
-The number of times each element in the input array has been matched can be retrieved using the `nmatch` function, returning a `Vector{Int}` whose length is the same as the input array and whose elements are the multiplicity of the matched entries:
+The number of times each element in the input array has been matched can be retrieved using the `countmatch` function, returning a `Vector{Int}` whose length is the same as the input array and whose elements are the multiplicity of the matched entries:
 ``` julia
 cm = countmatch(j, 1)
 for i in 1:length(A)
