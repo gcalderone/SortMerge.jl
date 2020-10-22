@@ -154,9 +154,7 @@ end
 
 
 simple_join(A, B, match::Function) =
-    sortmerge(A, B,
-              lt1=(v, i, j) -> true,
-              lt2=(v, i, j) -> true,
+    sortmerge(A, B, sorted=true,
               sd=(A, B, i, j) -> (match(A[i], B[j])  ?  0  :  999))
 
 
