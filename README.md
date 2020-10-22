@@ -253,7 +253,7 @@ The following example shows how to match 2D arrays containing geographical coord
 ``` julia
 nn = 1_000_000
 lat1  = rand(nn) .* 180 .- 90.;
-long1 = rand(nn) .*360;
+long1 = rand(nn) .* 360;
 lat2  = rand(nn) .* 180 .- 90.;
 long2 = rand(nn) .* 360;
 

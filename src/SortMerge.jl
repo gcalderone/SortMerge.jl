@@ -98,12 +98,18 @@ function sortmerge(A, B, args...;
     size2 = size(B)[1]
 
     if length(sort1) == 0
-        sort1 = collect(range(1, length=size1))
-        (sorted)  ||  (sort1 = sortperm(sort1, lt=(i, j) -> (lt1(A, i, j))))
+        sort1 = collect(1:size1)
+        if !sorted
+            quiet || println("Sorting vector 1...")
+            sort1 = sortperm(sort1, lt=(i, j) -> (lt1(A, i, j)))
+        end
     end
     if length(sort2) == 0
-        sort2 = collect(range(1, length=size2))
-        (sorted)  ||  (sort2 = sortperm(sort2, lt=(i, j) -> (lt2(B, i, j))))
+        sort2 = collect(1:size2)
+        if !sorted
+            quiet || println("Sorting vector 2...")
+            sort2 = sortperm(sort2, lt=(i, j) -> (lt2(B, i, j)))
+        end
     end
 
     i2a = 1
