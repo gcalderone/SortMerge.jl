@@ -2,7 +2,7 @@ __precompile__(true)
 
 module SortMerge
 
-using Printf, SparseArrays, ProgressMeter
+using Printf, SparseArrays, ProgressMeter, StatsBase
 
 import Base.show
 import Base.sortperm
@@ -46,6 +46,21 @@ countmatch(mm::Matched, source::Int) = mm.sources[source].cmatch
 sortperm(  mm::Matched, source::Int) = mm.sources[source].sortperm
 
 zip(mm::Matched) = zip(map(i -> mm.matched[:,i], 1:mm.nsrc)...)
+
+
+function subset(mm::Matched, selected::Vector{Int})
+    match = fill(0, length(selected), mm.nsrc)
+    sources = Vector{Source}()
+    for i in 1:mm.nsrc
+        match[:, i] = mm[i][selected]
+        cm = countmap(match[:, i])
+        ii = collect(keys(cm))
+        cc = collect(values(cm))
+        push!(sources, Source(mm.sources[i].size, mm.sources[i].sortperm,
+                              sparsevec(ii, cc, mm.sources[i].size)))
+    end
+    return Matched(mm.nsrc, length(selected), sources, match)
+end
 
 
 function multimatch(mm::Matched, source::Int, multi::Int; group=false)
