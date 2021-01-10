@@ -8,7 +8,7 @@ import Base.show
 import Base.sortperm
 import Base.zip
 
-import Base.iterate, Base.length, Base.size, Base.getindex,
+import Base.length, Base.size, Base.getindex,
        Base.firstindex, Base.lastindex, Base.IndexStyle
 
 export sortmerge, sortperm, nmatch, countmatch, multimatch, simple_join
@@ -66,7 +66,7 @@ end
 function multimatch(mm::Matched, source::Int, multi::Int; group=false)
     @assert multi >= 1
     index = findall(countmatch(mm, source) .== multi)
-    index_out = sortmerge(index, mm.matched[:,source], quiet=true)[2]
+    index_out = sortmerge(index, mm.matched[:,source])[2]
     matrix = mm.matched[index_out,:]
 
     out = Vector{Matched}()
@@ -90,19 +90,13 @@ function multimatch(mm::Matched, source::Int, multi::Int; group=false)
 end
 
 
-function default_lt(v, i, j)
-    return v[i] < v[j]
-end
+default_lt(v, i, j) = (v[i] < v[j])
+default_sd(A, B, i, j) = sign(A[i] - B[j])
 
-function default_sd(A, B, i, j)
-    return sign(A[i] - B[j])
-end
-
-# sortmerge(j::NTuple{2, Matched}, A, B, args...; sd=default_sd, quiet=false) = 
-#   sortmerge(A, B, args..., sort1=j[1].sortperm, sort2=j[2].sortperm, sd=sd, quiet=quiet)
+# sortmerge(j::NTuple{2, Matched}, A, B, args...; sd=default_sd) =
+#   sortmerge(A, B, args..., sort1=j[1].sortperm, sort2=j[2].sortperm, sd=sd)
 function sortmerge(A, B, args...;
                    sd=default_sd,
-                   quiet=false,
                    sort1=Vector{Int}(),
                    sort2=Vector{Int}(),
                    lt1=default_lt,
@@ -115,14 +109,12 @@ function sortmerge(A, B, args...;
     if length(sort1) == 0
         sort1 = collect(1:size1)
         if !sorted
-            quiet || println("Sorting vector 1...")
             sort1 = sortperm(sort1, lt=(i, j) -> (lt1(A, i, j)))
         end
     end
     if length(sort2) == 0
         sort2 = collect(1:size2)
         if !sorted
-            quiet || println("Sorting vector 2...")
             sort2 = sortperm(sort2, lt=(i, j) -> (lt2(B, i, j)))
         end
     end
@@ -159,18 +151,19 @@ function sortmerge(A, B, args...;
     ii = findall(cm1 .> 0); side1 = Source(size1, sort1, sparsevec(ii, cm1[ii], length(cm1)))
     ii = findall(cm2 .> 0); side2 = Source(size2, sort2, sparsevec(ii, cm2[ii], length(cm2)))
     mm = Matched(2, length(match1), [side1, side2], [match1 match2])
-
-    if !quiet
-        for i in 1:length(mm.sources)
-            ss = mm.sources[i]
-            uu = length(unique(mm.matched[:,i]))
-            @printf("Input %1d: %12d / %12d  (%6.2f%%)  -  max mult. %d\n",
-                    i, uu, ss.size, 100. * uu/float(ss.size), maximum(ss.cmatch))
-        end
-        @printf("Output : %12d\n",
-                size(mm.matched)[1])
-    end
     return mm
+end
+
+
+function show(io::IO, mime::MIME"text/plain", mm::Matched)
+    for i in 1:length(mm.sources)
+        ss = mm.sources[i]
+        uu = length(unique(mm.matched[:,i]))
+        @printf(io, "Input %1d: %12d / %12d  (%6.2f%%)  -  max mult. %d\n",
+                i, uu, ss.size, 100. * uu/float(ss.size), maximum(ss.cmatch))
+    end
+    @printf(io, "Output : %12d\n", size(mm.matched)[1])
+    nothing
 end
 
 

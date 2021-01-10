@@ -79,7 +79,7 @@ println("Check matching: ", sum(abs.(A[j[1]] .- B[j[2]])) == 0)
 ```
 where the purpose of the last line is just to perform a simple check on the matched pairs.
 
-Unless the `quiet=true` keyword is used, the `sortmerge` function reports a few details of the matching process. E.g., for the previous example:
+The default `show(j)` method reports a few details of the matching process. E.g., for the previous example:
 ```
 Input 1:       632368 /      1000000  ( 63.24%)  -  max mult. 10
 Input 2:       632449 /      1000000  ( 63.24%)  -  max mult. 8
@@ -101,8 +101,8 @@ The permutation vector that puts `A` and `B` in sorted order are retrieved with 
 
 Finally, you will get an extra boost performance if the input arrays are already sorted, i.e.
 ``` julia
-sortedA = A[sortperm(j, 1)]
-sortedB = B[sortperm(j, 2)]
+sortedA = A[sortperm(j, 1)];
+sortedB = B[sortperm(j, 2)];
 @time j = sortmerge(sortedA, sortedB, sorted=true);
 ```
 (the `sorted=true` keyword tells `sortmerge` that the input arrays are already sorted).
