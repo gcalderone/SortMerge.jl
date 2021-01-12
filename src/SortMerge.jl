@@ -125,9 +125,13 @@ function sortmerge(A, B, args...;
     cm1 = fill(0, size1)
     cm2 = fill(0, size2)
 
-    lastlog = -1.
-    progress = false
-    @showprogress 1 for i1 in 1:size1
+    desc = "SortMerge "
+    barlen = ProgressMeter.tty_width(desc, stderr)
+    (barlen > 50)  &&  (barlen = 50)
+    prog = Progress(size1, desc=desc, dt=0.5, color=:light_black, barlen=barlen,
+                    barglyphs=BarGlyphs('|','█', ['▏','▎','▍','▌','▋','▊','▉'],' ','|',))
+    for i1 in 1:size1
+        update!(prog, i1)
         for i2 in i2a:size2
             j1 = sort1[i1]
             j2 = sort2[i2]
@@ -147,6 +151,7 @@ function sortmerge(A, B, args...;
             end
         end
     end
+    finish!(prog)
 
     ii = findall(cm1 .> 0); side1 = Source(size1, sort1, sparsevec(ii, cm1[ii], length(cm1)))
     ii = findall(cm2 .> 0); side2 = Source(size2, sort2, sparsevec(ii, cm2[ii], length(cm2)))
@@ -155,12 +160,16 @@ function sortmerge(A, B, args...;
 end
 
 
-function show(io::IO, mime::MIME"text/plain", mm::Matched)
+show(io::IO, mime::MIME"text/plain", mm::Matched) = show(io, mm)
+show(mm::Matched) = show(stdout, mm)
+function show(io::IO, mm::Matched)
     for i in 1:length(mm.sources)
         ss = mm.sources[i]
         uu = length(unique(mm.matched[:,i]))
+        maxmult = 0
+        (length(ss.cmatch) > 0)  &&  (maxmult = maximum(ss.cmatch))
         @printf(io, "Input %1d: %12d / %12d  (%6.2f%%)  -  max mult. %d\n",
-                i, uu, ss.size, 100. * uu/float(ss.size), maximum(ss.cmatch))
+                i, uu, ss.size, 100. * uu/float(ss.size), maxmult)
     end
     @printf(io, "Output : %12d\n", size(mm.matched)[1])
     nothing
