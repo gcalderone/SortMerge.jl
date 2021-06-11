@@ -126,7 +126,7 @@ function sortmerge(A, B, args...;
     cm2 = fill(0, size2)
 
     desc = "SortMerge "
-    barlen = ProgressMeter.tty_width(desc, stderr)
+    barlen = ProgressMeter.tty_width(desc, stderr, false)
     (barlen > 50)  &&  (barlen = 50)
     prog = Progress(size1, desc=desc, dt=0.5, color=:light_black, barlen=barlen,
                     barglyphs=BarGlyphs('|','█', ['▏','▎','▍','▌','▋','▊','▉'],' ','|',))
