@@ -1,6 +1,6 @@
 name = "SortMerge"
 uuid = "041a2d23-8c6e-5597-be73-bf96b5e0dfd4"
-version = "1.3.4"
+version = "1.3.5"
 
 [deps]
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
