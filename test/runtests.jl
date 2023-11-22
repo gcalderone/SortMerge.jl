@@ -13,7 +13,7 @@ j = sortmerge(a1, a2)
 @test a2[countmatch(j, 2) .== 0]  == [3, 5, 9]
 
 # --------------------------------------------------------------------
-nn = 1_0_000
+nn = 10_000
 a1 = rand(MersenneTwister(0), 1.:nn,   nn);
 a2 = rand(MersenneTwister(1), 1.:nn, 2*nn);
 a1 = unique(a1);

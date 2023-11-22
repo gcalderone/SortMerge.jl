@@ -3,22 +3,21 @@ __precompile__(true)
 module SortMerge
 
 using Printf, SparseArrays, ProgressMeter, StatsBase
+using DataStructures
 
 import Base.show
-import Base.sortperm
 import Base.zip
 
 import Base.length, Base.size, Base.getindex,
        Base.firstindex, Base.lastindex, Base.IndexStyle
 
-export sortmerge, sortperm, nmatch, countmatch, multimatch, simple_join
+export sortmerge, nmatch, countmatch, multimatch, simple_join
 
 # --------------------------------------------------------------------
 # Source structure
 #
 struct Source
     size::Int
-    sortperm::Vector{Int}
     cmatch::SparseVector{Int,Int}
 end
 
@@ -43,7 +42,6 @@ IndexStyle(::Type{Matched}) = IndexLinear()
 
 nmatch(mm::Matched) = mm.nrow
 countmatch(mm::Matched, source::Int) = mm.sources[source].cmatch
-sortperm(  mm::Matched, source::Int) = mm.sources[source].sortperm
 
 zip(mm::Matched) = zip(map(i -> mm.matched[:,i], 1:mm.nsrc)...)
 
@@ -56,7 +54,7 @@ function subset(mm::Matched, selected::Vector{Int})
         cm = countmap(match[:, i])
         ii = collect(keys(cm))
         cc = collect(values(cm))
-        push!(sources, Source(mm.sources[i].size, mm.sources[i].sortperm,
+        push!(sources, Source(mm.sources[i].size,
                               sparsevec(ii, cc, mm.sources[i].size)))
     end
     return Matched(mm.nsrc, length(selected), sources, match)
@@ -78,7 +76,7 @@ function multimatch(mm::Matched, source::Int, multi::Int; group=false)
 
         sources = Vector{Source}()
         for i in 1:mm.nsrc
-            push!(sources, Source(mm.sources[i].size, Vector{Int}(),
+            push!(sources, Source(mm.sources[i].size,
                                   sparsevec(unique(mm.matched[index_out[jj], i]),
                                             multi, length(mm.sources[i].cmatch))))
         end
@@ -90,53 +88,68 @@ function multimatch(mm::Matched, source::Int, multi::Int; group=false)
 end
 
 
-default_lt(v, i, j) = (v[i] < v[j])
-default_sd(A, B, i, j) = sign(A[i] - B[j])
+default_lt(v::AbstractVector{T}, i, j) where T <: Number         = (v[i] < v[j])
+default_lt(v::AbstractVector{T}, i, j) where T <: AbstractString = (v[i] < v[j])
 
-# sortmerge(j::NTuple{2, Matched}, A, B, args...; sd=default_sd) =
-#   sortmerge(A, B, args..., sort1=j[1].sortperm, sort2=j[2].sortperm, sd=sd)
-function sortmerge(A, B, args...;
+default_sd(A::AbstractVector{T1}, B::AbstractVector{T2}, i, j) where {T1 <: Number, T2 <: Number} =
+    sign(A[i] - B[j])
+function default_sd(A::AbstractVector{T1}, B::AbstractVector{T2}, i, j) where {T1 <: AbstractString, T2 <: AbstractString}
+    if A[i] == B[j]
+        return 0
+    end
+    if A[i] < B[j]
+        return -1
+    end
+    return 1
+end
+
+
+function sortmerge(A, B, sd_args...;
                    sd=default_sd,
-                   sort1=Vector{Int}(),
-                   sort2=Vector{Int}(),
+                   sort1=nothing,
+                   sort2=nothing,
                    lt1=default_lt,
                    lt2=default_lt,
                    sorted=false)
-
     size1 = size(A)[1]
     size2 = size(B)[1]
 
-    if length(sort1) == 0
-        sort1 = collect(1:size1)
-        if !sorted
-            sort1 = sortperm(sort1, lt=(i, j) -> (lt1(A, i, j)))
-        end
-    end
-    if length(sort2) == 0
-        sort2 = collect(1:size2)
-        if !sorted
-            sort2 = sortperm(sort2, lt=(i, j) -> (lt2(B, i, j)))
-        end
+    if sorted
+        return sortmerge_internal(A, B, 1:size1, 1:size2, sd_args...; sd=sd)
     end
 
+    if isnothing(sort1)
+        sort1 = sortperm(1:size1, lt=(i, j) -> (lt1(A, i, j)))
+    end
+    if isnothing(sort2)
+        sort2 = sortperm(1:size2, lt=(i, j) -> (lt2(B, i, j)))
+    end
+    ret = sortmerge_internal(A, B, sort1, sort2, sd_args...; sd=sd)
+
+    ret = Matched(ret.nsrc, ret.nrow, ret.sources,
+                  hcat(sortperm(sort1)[sort1[ret.matched[:, 1]]],
+                       sortperm(sort2)[sort2[ret.matched[:, 2]]]))
+    return ret
+end
+
+
+function sortmerge_internal(A, B, sort1, sort2, sd_args...; sd=default_sd)
+    size1 = size(A)[1]
+    size2 = size(B)[1]
+
+    match = Array{Int}(undef, 0)
+    cm1 = DefaultDict{Int,Int}(0)
+    cm2 = DefaultDict{Int,Int}(0)
+
+    prog = Progress(size1, desc="SortMerge ", dt=0.5, color=:light_black)
     i2a = 1
-    match1 = Array{Int}(undef, 0)
-    match2 = Array{Int}(undef, 0)
-    cm1 = fill(0, size1)
-    cm2 = fill(0, size2)
-
-    desc = "SortMerge "
-    barlen = ProgressMeter.tty_width(desc, stderr, false)
-    (barlen > 50)  &&  (barlen = 50)
-    prog = Progress(size1, desc=desc, dt=0.5, color=:light_black, barlen=barlen,
-                    barglyphs=BarGlyphs('|','█', ['▏','▎','▍','▌','▋','▊','▉'],' ','|',))
     for i1 in 1:size1
-        update!(prog, i1)
+        ProgressMeter.update!(prog, i1)
         for i2 in i2a:size2
             j1 = sort1[i1]
             j2 = sort2[i2]
-            if length(args) > 0  # This improves performances
-                dd = Int(sd(A, B, j1, j2, args...))
+            if length(sd_args) > 0  # This improves performances
+                dd = Int(sd(A, B, j1, j2, sd_args...))
             else
                 dd = Int(sd(A, B, j1, j2))
             end
@@ -144,8 +157,7 @@ function sortmerge(A, B, args...;
             if     dd == -1; break
             elseif dd ==  1; i2a += 1
             elseif dd ==  0
-                push!(match1, j1)
-                push!(match2, j2)
+                append!(match, [j1, j2])
                 cm1[j1] += 1
                 cm2[j2] += 1
             end
@@ -153,9 +165,9 @@ function sortmerge(A, B, args...;
     end
     finish!(prog)
 
-    ii = findall(cm1 .> 0); side1 = Source(size1, sort1, sparsevec(ii, cm1[ii], length(cm1)))
-    ii = findall(cm2 .> 0); side2 = Source(size2, sort2, sparsevec(ii, cm2[ii], length(cm2)))
-    mm = Matched(2, length(match1), [side1, side2], [match1 match2])
+    side1 = Source(size1, sparsevec(cm1, size1))
+    side2 = Source(size2, sparsevec(cm2, size2))
+    mm = Matched(2, div(length(match), 2), [side1, side2], transpose(reshape(match, 2, :)))
     return mm
 end
 

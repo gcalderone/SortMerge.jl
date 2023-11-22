@@ -74,7 +74,7 @@ A more computationally demanding example is as follows:
 nn = 10_000_000
 A = rand(1:nn, nn);
 B = rand(1:nn, nn);
-j = sortmerge(A, B);
+@time j = sortmerge(A, B)
 println("Check matching: ", sum(abs.(A[j[1]] .- B[j[2]])) == 0)
 ```
 where the purpose of the last line is just to perform a simple check on the matched pairs.
@@ -93,17 +93,11 @@ The lines marked with `Input 1` and `Input 2` report, respectively:
 
 The last line reports the number of matched pairs in the output.
 
-A significant amount of time is spent sorting the input arrays, hence the algorithm will provide much better performances if the arrays are already sorted.  Since the order is so important, and it is calculated during a call to `sortmerge`, it will not be thrown away but returned in the results.  Hence if we are going to call again `sortmerge` we can take advantage of the previous calculation to speed up calculations:
+A significant amount of time is spent sorting the input arrays, hence the algorithm will provide much better performances if the arrays are already sorted:
 ``` julia
-j = sortmerge(A, B, sort1=sortperm(j, 1), sort2=sortperm(j, 2));
-```
-The permutation vector that puts `A` and `B` in sorted order are retrieved with the `sortperm` function, and passed through the `sort1` and `sort2` keywords.
-
-Finally, you will get an extra boost performance if the input arrays are already sorted, i.e.
-``` julia
-sortedA = A[sortperm(j, 1)];
-sortedB = B[sortperm(j, 2)];
-j = sortmerge(sortedA, sortedB, sorted=true);
+sort!(A);
+sort!(B);
+@time j = sortmerge(A, B, sorted=true);
 ```
 (the `sorted=true` keyword tells `sortmerge` that the input arrays are already sorted).
 
