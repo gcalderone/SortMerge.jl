@@ -9,7 +9,7 @@ import Base.zip
 
 import Base.length, Base.getindex
 
-export sortmerge, nmatch, countmatch, multimatch
+export sortmerge, nmatch, countmatch, subset_with_multiplicity, distinct_subsets
 
 
 # --------------------------------------------------------------------
@@ -19,16 +19,17 @@ struct Matched <: AbstractVector{Vector{Int}}
     orig_sizes::Vector{Int}
     matched::Vector{Vector{Int}}
     cmatch::Vector{SparseVector{Int,Int}}
+    minmult::Vector{Int}
     maxmult::Vector{Int}
     nunique::Vector{Int}
 
     Matched(orig_sizes::Vector{Int}, matched::Vector{Vector{Int}}) =
-        new(orig_sizes, matched, Vector{SparseVector{Int,Int}}(), Vector{Int}(), Vector{Int}())
+        new(orig_sizes, matched, Vector{SparseVector{Int,Int}}(), Vector{Int}(), Vector{Int}(), Vector{Int}())
 end
 
 # Methods
 length(mm::Matched) = length(mm.orig_sizes)
-getindex(mm::Matched, inds) = mm.matched[inds]
+getindex(mm::Matched, source) = mm.matched[source]
 zip(mm::Matched) = zip(map(i -> mm.matched[i], 1:length(mm))...)
 nmatch(mm::Matched) = length(mm.matched[1])
 
@@ -38,7 +39,13 @@ function populate_stats!(mm::Matched)
             cm = countmap(mm.matched[i])
             push!(mm.cmatch, sparsevec(cm, mm.orig_sizes[i]))
             push!(mm.nunique, length(cm))
-            push!(mm.maxmult, maximum(mm.cmatch[i]))
+            if length(cm) == 0
+                push!(mm.minmult, 0)
+                push!(mm.maxmult, 0)
+            else
+                push!(mm.minmult, minimum(values(cm)))
+                push!(mm.maxmult, maximum(values(cm)))
+            end
         end
     end
     nothing
@@ -47,48 +54,6 @@ end
 function countmatch(mm::Matched, source::Int)
     populate_stats!(mm)
     return mm.cmatch[source]
-end
-
-
-function subset(mm::Matched, selected::Vector{Int})
-    match = fill(0, length(selected), mm.nsrc)
-    sources = Vector{Source}()
-    for i in 1:mm.nsrc
-        match[:, i] = mm[i][selected]
-        cm = countmap(match[:, i])
-        ii = collect(keys(cm))
-        cc = collect(values(cm))
-        push!(sources, Source(mm.orig_sizes[i],
-                              sparsevec(ii, cc, mm.orig_sizes[i])))
-    end
-    return Matched(mm.nsrc, length(selected), sources, match)
-end
-
-
-function multimatch(mm::Matched, source::Int, multi::Int; group=false)
-    @assert multi >= 1
-    index = findall(countmatch(mm, source) .== multi)
-    index_out = sortmerge(index, mm.matched[source])[2]
-    matrix = mm.matched[index_out,:]
-
-    out = Vector{Matched}()
-    ngroups = (group  ?  length(index)  :  1)
-    for igroup in 1:ngroups
-        jj = (group  ?
-              findall(matrix[:,source] .== index[igroup])  :
-              collect(1:length(index_out)))
-
-        sources = Vector{Source}()
-        for i in 1:mm.nsrc
-            push!(sources, Source(mm.orig_sizes[i],
-                                  sparsevec(unique(mm.matched[index_out[jj], i]),
-                                            multi, length(mm.sources[i].cmatch))))
-        end
-        push!(out, Matched(mm.nsrc, length(jj), sources, mm.matched[index_out[jj],:]))
-    end
-
-    (group)  &&  (return out)
-    return out[1]
 end
 
 
@@ -175,8 +140,10 @@ show(mm::Matched) = show(stdout, mm)
 function show(io::IO, mm::Matched)
     populate_stats!(mm)
     for i in 1:length(mm.orig_sizes)
-        @printf(io, "Input %1d: %12d / %12d  (%6.2f%%)  -  max mult. %d\n",
-                i, mm.nunique[i], mm.orig_sizes[i], 100. * mm.nunique[i]/float(mm.orig_sizes[i]), mm.maxmult[i])
+        @printf(io, "Input %1d: %12d / %12d  (%6.2f%%), min/max mult.: %6d : %6d\n",
+                i, mm.nunique[i], mm.orig_sizes[i],
+                100. * mm.nunique[i]/float(mm.orig_sizes[i]),
+                mm.minmult[i], mm.maxmult[i])
     end
     @printf(io, "Output : %12d\n", nmatch(mm))
     nothing
@@ -187,5 +154,31 @@ simple_join(A, B, match::Function) =
     sortmerge(A, B, sorted=true,
               sd=(A, B, i, j) -> (match(A[i], B[j])  ?  0  :  999))
 =#
+
+
+subset(mm::Matched, indices::Vector{Int}) =
+    Matched(mm.orig_sizes, [mm.matched[i][indices] for i in 1:length(mm)])
+
+
+function subset_with_multiplicity(mm::Matched, source::Int, multiplicity::Int)
+    @assert multiplicity >= 1
+    i = findall(countmatch(mm, source) .== multiplicity)
+    if length(i) == 0
+        return subset(mm, Int[])
+    end
+    j = sortmerge(i, mm.matched[source])[2]
+    out = subset(mm, j)
+    return out
+end
+
+
+function distinct_subsets(mm::Matched, source::Int)
+    out = Vector{Matched}()
+    for index in unique(mm[source])
+        i = findall(mm[source] .== index)
+        push!(out, subset(mm, i))
+    end
+    return out
+end
 
 end # module

@@ -52,7 +52,7 @@ for i in 1:length(A)
     println("Element at index $i ($(A[i])) has been matched $(cm[i]) times")
 end
 ```
-Analogously, for the second array:
+Similarly, for the second array:
 ``` julia
 cm = countmatch(j, 2)
 for i in 1:length(B)
@@ -81,15 +81,15 @@ where the purpose of the last line is just to perform a simple check on the matc
 
 The default `show(j)` method reports a few details of the matching process. E.g., for the previous example:
 ```
-Input 1:       632368 /      1000000  ( 63.24%)  -  max mult. 10
-Input 2:       632449 /      1000000  ( 63.24%)  -  max mult. 8
-Output :      1000377
+Input 1:      6319945 /     10000000  ( 63.20%), min/max mult.:      1 :      9
+Input 2:      6319736 /     10000000  ( 63.20%), min/max mult.:      1 :      9
+Output :      9997827
 ```
 The lines marked with `Input 1` and `Input 2` report, respectively:
 - the number of indices for which a matching pair has been found;
 - the total number of elements in input array;
 - the fraction of indices for which a matching pair has been found;
-- the maximum multiplicity;
+- the minimum and maximum multiplicity;
 
 The last line reports the number of matched pairs in the output.
 
@@ -104,27 +104,29 @@ sort!(B);
 
 ## Handling multiple matched entries
 
-The `multimatch` function allows to extract matching pairs with a given multiplicity.  E.g., to find the matched pairs whose index in the **first** array occurs twice (multiplicity = 2):
+The `subset_with_multiplicity` function allows to extract the subset of matching entries with a given multiplicity.  E.g., to find the matched entries whose index in the **first** array occurs twice (multiplicity = 2):
 ``` julia
 A = [2,3,2,5,7,2,9,9,10,12]
 B = [2,1,7,7,4,6,10,11]
 j = sortmerge(A, B)
 
-m = multimatch(j, 1, 2);
+m = subset_with_multiplicity(j, 1, 2);
 display([m[1] m[2]])
 ```
-The matched pairs whose index in the **second** array (rather than **first**) occur three times (multiplicity = 3) is obtained as follows:
+
+Similarly, the matched ntries whose index in the **second** array occur thrice (multiplicity = 3) is obtained as follows:
 ``` julia
-for (i1, i2) in zip(multimatch(j, 2, 3))
+for (i1, i2) in zip(subset_with_multiplicity(j, 2, 3))
     println(i1, "  ", i2)
 end
 ```
 
-Another facility provided by `sortmerge` is to separate matching pairs into groups, e.g.:
+Another facility provided by `sortmerge` is to separate matching entries into distinct subsets, e.g.:
 ``` julia
-for group in multimatch(j, 2, 3, group=true)
-    println("The index ", group[2][1], " in the second table matches the following indices in the first:")
-    println(group[1])
+for group in SortMerge.distinct_subsets(j, 1)
+	if length(group) > 0
+		println("Entry at index ", group[1][1], " in the first vector matches the following matching entries in the second vector: ", group[2])
+	end
 end
 ```
 
@@ -219,11 +221,6 @@ end
 ```
 Note that since the order relation is partial the `sd` function will sometimes return a number different from -1, 0 and 1, resulting in the so called *missed match* condition (return value is 999).
 
-You may check that the result is correct by disabling all optimization hints and performing a simple join by comparing **each** element in the first array with **each** element in the second:
-```julia
-@time j = simple_join(a1, a2, (a, b) -> (abs(a-b) < 10. / nn))
-```
-but be prepared that the execution time will be much longer!
 
 Another possible approach is to sort the numbers by their distance from the origin, i.e.
 ```julia
