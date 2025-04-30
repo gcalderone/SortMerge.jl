@@ -270,7 +270,7 @@ end
 ### Match arrays of astronomical coordinates
 
 The following example shows how to match two vectors of [Skycoords](https://github.com/JuliaAstro/SkyCoords.jl).  The code is similar to the previous example dealing with geographical coordinates, but it features a further optimization to avoid calculating the actual great circle distance when right ascension values are too distant:
-```
+```julia
 using SkyCoords, AstroLib
 
 nn = 1_000_000
