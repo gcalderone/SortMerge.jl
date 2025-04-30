@@ -43,3 +43,21 @@ j = sortmerge(a1, a2, sorted=true)
 @test sum(abs.(a1[j[1]] .- a2[j[2]])) == 0
 cm = countmatch(j, 1); for i in 1:length(cm); @test cm[i] == length(findall(a1[i] .== a2)); end
 cm = countmatch(j, 2); for i in 1:length(cm); @test cm[i] == length(findall(a2[i] .== a1)); end
+
+
+@testset "Progress control" begin
+    # Create test data
+    v1 = rand(100)
+    v2 = rand(200)
+
+    # Test with progress enabled (default)
+    result1 = sortmerge(v1, v2)
+    @test result1 isa Matched
+
+    # Test with progress explicitly disabled
+    result2 = sortmerge(v1, v2, show_progress=false)
+    @test result2 isa Matched
+
+    # Verify results are identical
+    @test length(result1.matched[1]) == length(result2.matched[1])
+end
