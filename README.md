@@ -79,6 +79,11 @@ println("Check matching: ", sum(abs.(A[j[1]] .- B[j[2]])) == 0)
 ```
 where the purpose of the last line is just to perform a simple check on the matched pairs.
 
+Note that for computations exceeding ~1 sec a progress meter is displayed.  You may disable this feature with `show_progress=false`, e.g.:
+```julia
+@time j = sortmerge(A, B, show_progress=false)
+```
+
 The default `show(j)` method reports a few details of the matching process. E.g., for the previous example:
 ```
 Input 1:      6319945 /     10000000  ( 63.20%), min/max mult.:      1 :      9
