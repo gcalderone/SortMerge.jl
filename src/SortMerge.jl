@@ -9,7 +9,7 @@ import Base.zip
 
 import Base.length, Base.getindex
 
-export sortmerge, nmatch, countmatch, subset_with_multiplicity, distinct_subsets
+export sortmerge, nmatch, countmatch, subset_with_multiplicity, distinct_subsets, Matched
 
 
 # --------------------------------------------------------------------
@@ -79,7 +79,8 @@ function sortmerge(A, B, sd_args...;
                    sort2=nothing,
                    lt1=default_lt,
                    lt2=default_lt,
-                   sorted=false)
+                   sorted=false,
+                   show_progress::Bool=true)
     size1 = size(A)[1]
     size2 = size(B)[1]
 
@@ -93,24 +94,26 @@ function sortmerge(A, B, sd_args...;
     if isnothing(sort2)
         sort2 = sortperm(1:size2, lt=(i, j) -> (lt2(B, i, j)))
     end
-    ret = sortmerge_internal(A, B, sort1, sort2, sd_args...; sd=sd)
+    ret = sortmerge_internal(A, B, sort1, sort2, sd_args...; sd=sd, show_progress=show_progress)
     return Matched(ret.orig_sizes,
                    [sortperm(sort1)[sort1[ret.matched[1]]],
                     sortperm(sort2)[sort2[ret.matched[2]]]])
 end
 
 
-function sortmerge_internal(A, B, sort1, sort2, sd_args...; sd=default_sd)
+function sortmerge_internal(A, B, sort1, sort2, sd_args...; sd=default_sd, show_progress::Bool=true)
     size1 = size(A)[1]
     size2 = size(B)[1]
 
     match1 = Array{Int}(undef, 0)
     match2 = Array{Int}(undef, 0)
 
-    prog = Progress(size1, desc="SortMerge ", dt=0.5, color=:light_black)
+    # prog = Progress(size1, desc="SortMerge ", dt=0.5, color=:light_black)
+    prog = show_progress ? Progress(size1, desc="SortMerge ", dt=0.5, color=:light_black) : nothing
     i2a = 1
     for i1 in 1:size1
-        ProgressMeter.update!(prog, i1)
+        # Update progress only if enabled
+        !isnothing(prog) && ProgressMeter.update!(prog, i1)
         for i2 in i2a:size2
             j1 = sort1[i1]
             j2 = sort2[i2]
@@ -128,7 +131,8 @@ function sortmerge_internal(A, B, sort1, sort2, sd_args...; sd=default_sd)
             end
         end
     end
-    finish!(prog)
+    # Finish progress only if enabled
+    !isnothing(prog) && finish!(prog)
 
     mm = Matched([size1, size2], [match1, match2])
     return mm
