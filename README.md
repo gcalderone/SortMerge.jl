@@ -249,14 +249,47 @@ lat2  = rand(nn) .* 180 .- 90.;
 long2 = rand(nn) .* 360;
 
 using AstroLib
-lt(v, i, j) = (v[i, 2] < v[j, 2])
+lt(v, i, j) = (v[i, 1] < v[j, 1])
 function sd(v1, v2, i1, i2, threshold_arcsec)
     threshold_deg = threshold_arcsec / 3600. # [deg]
-    d = (v1[i1, 2] - v2[i2, 2]) / threshold_deg
+    d = (v1[i1, 1] - v2[i2, 1]) / threshold_deg
     (abs(d) >= 1)  &&  (return sign(d))
-    dd = gcirc(2, v1[i1, 1], v1[i1, 2], v2[i2, 1], v2[i2, 2])
+    dd = gcirc(2, v1[i1, 2], v1[i1, 1], v2[i2, 2], v2[i2, 1])
     (dd < threshold_arcsec)  &&  (return 0)
     return 999
 end
 @time j = sortmerge([lat1 long1], [lat2 long2], lt1=lt, lt2=lt, sd=sd, 1.)
+```
+
+
+### Match arrays of astronomical coordinates
+
+The following example shows how to match two vectors of [Skycoords](https://github.com/JuliaAstro/SkyCoords.jl).  The code is similar to the previous example dealing with geographical coordinates, but it features a further optimization to avoid calculating the actual great circle distance when right ascension values are too distant:
+```
+using SkyCoords, AstroLib
+
+nn = 1_000_000
+c1 = ICRSCoords.(rand(nn) .* 2pi, rand(nn) .* pi .- pi/2);
+c2 = ICRSCoords.(rand(nn) .* 2pi, rand(nn) .* pi .- pi/2);
+
+lt(v, i, j) = (v[i].dec < v[j].dec)
+function sd(v1, v2, i1, i2, threshold_arcsec)
+    threshold_rad = threshold_arcsec / 3600. * pi / 180.
+
+    d = (v1[i1].dec - v2[i2].dec) / threshold_rad
+    (abs(d) >= 1)  &&  (return sign(d))
+
+    maxd = max(abs(v1[i1].dec), abs(v2[i2].dec))
+    if pi/2. - maxd > pi / 180. # avoid this optimization in regions below 1 deg from the poles
+        d = abs(v1[i1].ra - v2[i2].ra)
+        (d > pi)  &&  (d = 2pi - d)
+        d *= cos(maxd) / threshold_rad
+        (d >= 1)  &&  (return 999)
+    end
+
+    dd = gcirc(0, v1[i1].ra, v1[i1].dec, v2[i2].ra, v2[i2].dec)
+    (dd < threshold_rad)  &&  (return 0)
+    return 999
+end
+@time j = sortmerge(c1, c2, lt1=lt, lt2=lt, sd=sd, 1.);
 ```

@@ -173,11 +173,18 @@ end
 
 
 function distinct_subsets(mm::Matched, source::Int)
-    out = Vector{Matched}()
-    for index in unique(mm[source])
-        i = findall(mm[source] .== index)
-        push!(out, subset(mm, i))
+    out = Vector{SortMerge.Matched}()
+    sp = sortperm(mm[source])
+    ifrom = 1
+    i = 2
+    while i <= length(sp)
+        if mm[source][sp[ifrom]] != mm[source][sp[i]]
+            push!(out, SortMerge.subset(mm, sp[ifrom:(i-1)]))
+            ifrom = i
+        end
+        i += 1
     end
+    push!(out, SortMerge.subset(mm, sp[ifrom:(i-1)]))
     return out
 end
 
